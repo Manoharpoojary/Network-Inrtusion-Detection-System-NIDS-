@@ -8,6 +8,7 @@ import {
   Empty,
   ErrorBlock,
   Field,
+  FieldAction,
   LabelBadge,
   Loading,
   Pagination,
@@ -107,7 +108,7 @@ export function Alerts({ onOpenAlert }: { onOpenAlert: (id: number) => void }) {
 
   return (
     <Card title="Alerts" subtitle="Created for flows the model labels Attack. Severity: high if P(attack) ≥ the configured cut-off, otherwise medium.">
-      <form className="mb-4 flex flex-wrap items-end gap-3"
+      <form className="mb-4 flex flex-wrap items-start gap-3"
             onSubmit={(e) => { e.preventDefault(); setSearch(q); setOffset(0) }}>
         <Field label="Severity">
           <select className={inputClass} value={severity} onChange={(e) => { setSeverity(e.target.value); setOffset(0) }}>
@@ -125,7 +126,9 @@ export function Alerts({ onOpenAlert }: { onOpenAlert: (id: number) => void }) {
         <Field label="Search" hint="Protocol, destination port or alert id">
           <input className={inputClass} value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. 445" maxLength={64} />
         </Field>
-        <Button type="submit" variant="secondary">Search</Button>
+        <FieldAction>
+          <Button type="submit" variant="secondary">Search</Button>
+        </FieldAction>
       </form>
       {alerts.error ? (
         <ErrorBlock error={alerts.error} onRetry={alerts.reload} />

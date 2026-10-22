@@ -259,6 +259,16 @@ export function Pagination({
   )
 }
 
+/** Aligns a button/checkbox with Field inputs in a top-aligned row (reserves the label line). */
+export function FieldAction({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1 text-sm">
+      <span aria-hidden className="invisible font-medium">&nbsp;</span>
+      <div className="flex min-h-[38px] items-center gap-3">{children}</div>
+    </div>
+  )
+}
+
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <label className="flex flex-col gap-1 text-sm">

@@ -1,4 +1,4 @@
-import { Activity, FileSearch, Play, Square, Wifi } from 'lucide-react'
+import { Activity, FileSearch, Play, RotateCcw, Square, Wifi } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { ApiError, api } from '../api/client'
 import type {
@@ -26,6 +26,7 @@ import {
 import { inputClass } from '../lib/cx'
 import { useApi, usePolling } from '../hooks/useApi'
 import { formatBytes, formatDateTime, formatNumber, formatPercent } from '../lib/format'
+import { type CapturableInterface, rankInterfaces } from '../lib/interfaces'
 
 const STATUS_TONE: Record<FeatureStatus, 'green' | 'sky' | 'red' | 'slate'> = {
   derived: 'green',
@@ -134,10 +135,21 @@ function FlowTable({ flows }: { flows: FlowSample[] }) {
   )
 }
 
-function InterfacesCard({ onInterfaces }: { onInterfaces: (names: string[]) => void }) {
+function InterfacesCard({ onInterfaces }: { onInterfaces: (list: CapturableInterface[]) => void }) {
   const data = useApi(async () => {
     const r = await api.interfaces()
-    onInterfaces(r.interfaces.filter((i) => i.visible_to_scapy).map((i) => i.name))
+    onInterfaces(
+      rankInterfaces(
+        r.interfaces
+          .filter((i) => i.visible_to_scapy)
+          .map((i) => ({
+            name: i.name,
+            isUp: i.is_up === true,
+            isLoopback: i.is_loopback,
+            bytesRecv: i.counters?.bytes_recv ?? 0,
+          })),
+      ),
+    )
     return r
   }, [])
   const [check, setCheck] = useState<CaptureCheckResponse | null>(null)
@@ -283,7 +295,7 @@ function PcapCard({ onDone }: { onDone: () => void }) {
   )
 }
 
-function LiveCard({ interfaces, onDone }: { interfaces: string[]; onDone: () => void }) {
+function LiveCard({ interfaces, onDone }: { interfaces: CapturableInterface[]; onDone: () => void }) {
   const status = useApi(() => api.liveStatus(), [])
   const s = status.data
   const active = s?.state === 'running' || s?.state === 'starting' || s?.state === 'stopping'
@@ -311,7 +323,7 @@ function LiveCard({ interfaces, onDone }: { interfaces: string[]; onDone: () => 
     }
   }
 
-  const chosen = iface || interfaces[0] || ''
+  const chosen = iface || interfaces[0]?.name || ''
   return (
     <Card title="Live capture (feature extraction only)"
           subtitle="Captures packet headers on one interface, builds flows and reports compatibility. Capture only traffic you are authorised to monitor. Controls work only from this machine.">
@@ -335,34 +347,49 @@ function LiveCard({ interfaces, onDone }: { interfaces: string[]; onDone: () => 
             )}
 
             {!active && (
-              <form className="flex flex-wrap items-end gap-3" onSubmit={(e) => {
+              <form className="space-y-3" onSubmit={(e) => {
                 e.preventDefault()
                 void act(() => api.liveStart({ interface: chosen, bpf_filter: bpf || undefined, max_duration_seconds: duration, authorized }, token || undefined))
               }}>
-                <Field label="Interface">
-                  <select className={inputClass} value={chosen} onChange={(e) => setIface(e.target.value)}>
-                    {interfaces.length === 0 && <option value="">No capturable interfaces</option>}
-                    {interfaces.map((n) => <option key={n} value={n}>{n}</option>)}
-                  </select>
-                </Field>
-                <Field label="BPF filter (optional)" hint="e.g. tcp or udp">
-                  <input className={inputClass} value={bpf} maxLength={200} onChange={(e) => setBpf(e.target.value)} />
-                </Field>
-                <Field label="Max duration (s)">
-                  <input className={`${inputClass} w-28`} type="number" min={1} max={3600} value={duration}
-                         onChange={(e) => setDuration(Number(e.target.value))} />
-                </Field>
-                <Field label="Capture token" hint="Only if NIDS_CAPTURE_TOKEN is set">
-                  <input className={inputClass} type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} />
-                </Field>
-                <label className="flex max-w-sm items-start gap-2 text-sm text-slate-300">
-                  <input type="checkbox" className="mt-0.5 h-4 w-4 accent-sky-500" checked={authorized}
-                         onChange={(e) => setAuthorized(e.target.checked)} />
-                  I am authorised to monitor traffic on this interface.
-                </label>
-                <Button type="submit" disabled={busy || !authorized || !chosen}>
-                  <Play aria-hidden className="h-4 w-4" /> Start
-                </Button>
+                <div className="grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <Field label="Interface">
+                    <select className={inputClass} value={chosen} onChange={(e) => setIface(e.target.value)}>
+                      {interfaces.length === 0 && <option value="">No capturable interfaces</option>}
+                      {interfaces.map((i) => (
+                        <option key={i.name} value={i.name}>{i.name}{i.isUp ? '' : ' (down)'}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="BPF filter (optional)" hint="e.g. tcp or udp">
+                    <input className={inputClass} value={bpf} maxLength={200} onChange={(e) => setBpf(e.target.value)} />
+                  </Field>
+                  <Field label="Max duration (s)" hint="1 to 3600 seconds">
+                    <input className={inputClass} type="number" min={1} max={3600} value={duration}
+                           onChange={(e) => setDuration(Number(e.target.value))} />
+                  </Field>
+                  <Field label="Capture token" hint="Only if NIDS_CAPTURE_TOKEN is set">
+                    <input className={inputClass} type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} />
+                  </Field>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="flex items-center gap-2 text-sm text-slate-300">
+                    <input type="checkbox" className="h-4 w-4 accent-sky-500" checked={authorized}
+                           onChange={(e) => setAuthorized(e.target.checked)} />
+                    I am authorised to monitor traffic on this interface.
+                  </label>
+                  <Button type="submit" disabled={busy || !authorized || !chosen}>
+                    <Play aria-hidden className="h-4 w-4" /> Start
+                  </Button>
+                  {s.session && (
+                    <Button variant="secondary" disabled={busy} title="Clear this panel; saved runs stay in history"
+                            onClick={() => void act(() => api.liveReset(token || undefined))}>
+                      <RotateCcw aria-hidden className="h-4 w-4" /> Reset
+                    </Button>
+                  )}
+                </div>
+                {interfaces.length > 0 && !interfaces.find((i) => i.name === chosen)?.isUp && (
+                  <p className="text-xs text-amber-300">This interface is down; choose one that is up to see traffic.</p>
+                )}
               </form>
             )}
             {active && (
@@ -451,7 +478,7 @@ function MappingCard() {
 }
 
 export function Network() {
-  const [capturable, setCapturable] = useState<string[]>([])
+  const [capturable, setCapturable] = useState<CapturableInterface[]>([])
   const [version, setVersion] = useState(0)
   const bump = useCallback(() => setVersion((v) => v + 1), [])
   return (

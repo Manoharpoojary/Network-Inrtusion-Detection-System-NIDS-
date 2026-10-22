@@ -31,7 +31,7 @@ export function AlertRows({ alerts, onOpen }: { alerts: Alert[]; onOpen?: (id: n
           <Th>Protocol</Th>
           <Th>Dst port</Th>
           <Th>Source</Th>
-          {onOpen && <Th className="sr-only">Open</Th>}
+          {onOpen && <Th><span className="sr-only">Actions</span></Th>}
         </tr>
       </thead>
       <tbody className="divide-y divide-slate-800">

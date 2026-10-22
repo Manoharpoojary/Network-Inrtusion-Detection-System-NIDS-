@@ -34,6 +34,7 @@ def local(tmp_path):
         ("get", "/api/network/live/status"),
         ("post", "/api/network/live/start"),
         ("post", "/api/network/live/stop"),
+        ("post", "/api/network/live/reset"),
         ("post", "/api/network/capture-check"),
     ],
 )
@@ -175,3 +176,23 @@ def test_status_poll_is_fast(local):
     for _ in range(20):
         local.get("/api/network/live/status")
     assert time.perf_counter() - start < 5
+
+
+def test_reset_via_api_keeps_history(local):
+    _fake_capture(local, packets=[meta()])
+    local.post("/api/network/live/start", json=START)
+    busy = local.post("/api/network/live/reset")
+    assert busy.status_code == 409 and busy.json()["error"]["code"] == "capture_busy"
+    local.post("/api/network/live/stop")
+    r = local.post("/api/network/live/reset")
+    assert r.status_code == 200 and r.json()["state"] == "stopped" and r.json()["session"] is None
+    assert local.get("/api/network/live/status").json()["session"] is None
+    assert local.get("/api/network/runs").json()["total"] == 1
+
+
+def test_reset_requires_token_when_configured(tmp_path):
+    with api_client(tmp_path, client_host="127.0.0.1", capture_token="tok") as c:
+        assert c.post("/api/network/live/reset").status_code == 401
+        assert (
+            c.post("/api/network/live/reset", headers={"X-Capture-Token": "tok"}).status_code == 200
+        )

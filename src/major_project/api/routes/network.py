@@ -242,3 +242,9 @@ def live_start(body: LiveStartRequest, state: AppState = Depends(require_capture
 @router.post("/live/stop", responses=_LIVE_ERRORS)
 def live_stop(state: AppState = Depends(require_capture_control)) -> dict:
     return _capture_call(state.capture.stop)
+
+
+@router.post("/live/reset", responses=_LIVE_ERRORS)
+def live_reset(state: AppState = Depends(require_capture_control)) -> dict:
+    """Clear the finished session from the live panel. Saved runs in history are kept."""
+    return _capture_call(state.capture.reset)

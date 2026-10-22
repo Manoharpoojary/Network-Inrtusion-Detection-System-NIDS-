@@ -141,6 +141,8 @@ export const api = {
     body: { interface: string; bpf_filter?: string; max_duration_seconds?: number; authorized: boolean },
     token?: string,
   ) => postJson<LiveStatus>('/api/network/live/start', body, token ? { 'X-Capture-Token': token } : {}),
+  liveReset: (token?: string) =>
+    postJson<LiveStatus>('/api/network/live/reset', undefined, token ? { 'X-Capture-Token': token } : {}),
   liveStop: (token?: string) =>
     postJson<LiveStatus>('/api/network/live/stop', undefined, token ? { 'X-Capture-Token': token } : {}),
 }

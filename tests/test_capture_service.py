@@ -286,3 +286,20 @@ def test_shutdown_stops_active_session(made):
     )
     assert created["sniffer"].stop_calls == 1 and len(finished) == 1
     mgr.shutdown()  # idempotent when nothing is running
+
+
+def test_reset_clears_finished_session_only(made):
+    mgr, _, finished, _ = made(packets=[meta(), meta(dport=53)])
+    assert mgr.reset()["state"] == "stopped"  # nothing to reset is fine
+    mgr.start("Wi-Fi")
+    with pytest.raises(CaptureError) as exc:
+        mgr.reset()
+    assert exc.value.code == "capture_busy" and mgr.state == "running"
+    mgr.stop()
+    assert mgr.status()["session"]["counters"]["packets_seen"] == 2
+    cleared = mgr.reset()
+    assert cleared == mgr.status()
+    assert cleared["state"] == "stopped" and cleared["session"] is None
+    assert len(finished) == 1  # the persisted session is not touched
+    assert mgr.start("Wi-Fi")["session"]["counters"]["packets_seen"] >= 0  # can start again
+    mgr.stop()

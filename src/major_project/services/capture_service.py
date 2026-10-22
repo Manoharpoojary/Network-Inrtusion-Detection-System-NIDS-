@@ -245,6 +245,25 @@ class LiveCaptureManager:
             with contextlib.suppress(CaptureError):  # it may have stopped in the meantime
                 self.stop("application_shutdown")
 
+    def reset(self) -> dict:
+        """Clear the last finished session from memory (counters, recent flows, report).
+
+        Only allowed when no capture is active. Sessions already saved to the database are kept.
+        """
+        with self._lock:
+            if self.state in ("starting", "running", "stopping"):
+                raise CaptureError(
+                    409, "capture_busy", "Stop the running capture before resetting."
+                )
+            self._session = None
+            self._sniffer = None
+            self._queue = None
+            self._worker = None
+            self._aggregator = None
+            self._recent.clear()
+            self._last_report = None
+            return self.status()
+
     def status(self, include_flows: int = 50) -> dict:
         with self._lock:
             s = self._session

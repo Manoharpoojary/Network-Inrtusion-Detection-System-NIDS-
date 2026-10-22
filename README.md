@@ -73,14 +73,14 @@ matching the verified confusion matrix (TN 973, FP 27, FN 102, TP 898).
 ## 4. Test and lint
 
 ```powershell
-uv run pytest -q                                   # backend: 216 tests
+uv run pytest -q                                   # backend: 220 tests
 uv run ruff check src tests scripts
 uv run ruff format --check src tests scripts
 
 cd src/frontend
 npm run lint        # oxlint
 npm run typecheck   # tsc -b
-npm test            # 12 unit/component tests (+5 end-to-end tests, skipped unless E2E_BASE_URL is set)
+npm test            # 14 unit/component tests (+5 end-to-end tests, skipped unless E2E_BASE_URL is set)
 npm run build
 ```
 
@@ -143,6 +143,7 @@ curl http://127.0.0.1:8000/api/network/live/status                       # local
 curl -X POST http://127.0.0.1:8000/api/network/live/start -H "Content-Type: application/json" \
      -d '{"interface": "Wi-Fi", "authorized": true, "max_duration_seconds": 60}'
 curl -X POST http://127.0.0.1:8000/api/network/live/stop
+curl -X POST http://127.0.0.1:8000/api/network/live/reset   # clear the finished session; saved runs are kept
 ```
 
 `tests/fixtures/synthetic_flow_record.json` holds a **synthetic** example record under its `record` key.
