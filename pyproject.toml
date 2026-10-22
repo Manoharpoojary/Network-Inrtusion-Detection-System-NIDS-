@@ -1,0 +1,43 @@
+[project]
+name = "major-project"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Manohar Poojary", email = "poojarymanohara967@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "joblib>=1.6,<2",
+    "numpy>=2.0,<2.3",
+    "pandas>=2.2,<3",
+    "pydantic>=2.9,<3",
+    "pydantic-settings>=2.6,<3",
+    "scikit-learn==1.6.1",
+]
+
+[project.scripts]
+major-project = "major_project:main"
+
+[build-system]
+requires = ["uv_build>=0.12.0,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3,<9",
+    "ruff>=0.8",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# Never lint or reformat the original training notebook or data.
+extend-exclude = ["src/major_project/training", "src/major_project/model", "src/major_project/result"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
