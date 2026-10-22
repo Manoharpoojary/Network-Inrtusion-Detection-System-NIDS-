@@ -1,0 +1,6 @@
+# Store and check out the original project artifacts byte-for-byte (no line-ending conversion).
+*.joblib binary
+*.jpeg binary
+*.png binary
+src/major_project/training/** -text
+src/major_project/result/** -text
