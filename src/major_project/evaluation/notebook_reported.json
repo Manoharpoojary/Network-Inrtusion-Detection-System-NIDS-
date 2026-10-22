@@ -1,0 +1,21 @@
+{
+  "description": "Values transcribed from the saved outputs of src/major_project/training/Untitled2.ipynb. Only the Random Forest row is independently re-verified (see verified_metrics.json); the other models were not saved and were not re-run.",
+  "split": "Same held-out 20% split (2,000 rows), decision rule P(attack) >= 0.5",
+  "source_cell": 55,
+  "models": [
+    {"model": "Random Forest", "accuracy": 0.9355, "attack_precision": 0.9708, "attack_recall": 0.898, "attack_f1": 0.9330, "roc_auc": 0.9871, "average_precision": 0.9881, "status": "verified"},
+    {"model": "XGBoost", "accuracy": 0.9310, "attack_precision": 0.9585, "attack_recall": 0.901, "attack_f1": 0.9289, "roc_auc": 0.9874, "average_precision": 0.9886, "status": "reported_not_reverified"},
+    {"model": "ANN", "accuracy": 0.9355, "attack_precision": 0.9802, "attack_recall": 0.889, "attack_f1": 0.9324, "roc_auc": 0.9862, "average_precision": 0.9878, "status": "reported_not_reverified"},
+    {"model": "LSTM", "accuracy": 0.9030, "attack_precision": 0.9468, "attack_recall": 0.854, "attack_f1": 0.8980, "roc_auc": 0.9665, "average_precision": 0.9722, "status": "reported_not_reverified"}
+  ],
+  "training_time_seconds": {
+    "note": "Single Colab wall-clock runs. The training-time chart (cell 62) uses hard-coded values that differ from the times printed in the saved outputs; both are listed. Indicative only.",
+    "printed_in_outputs": {"Random Forest": 1.01, "XGBoost": 0.76, "ANN": 31.50, "LSTM": 47.49},
+    "printed_source_cells": {"Random Forest": 38, "XGBoost": 17, "ANN": 18, "LSTM": 47},
+    "chart_hardcoded": {"Random Forest": 1.04, "XGBoost": 2.83, "ANN": 25.40, "LSTM": 52.63}
+  },
+  "pcc_feature_selection_experiment": {
+    "note": "Top-15 numeric features by |Pearson r| (cell 26). Not used by the deployed model, which uses all 35 inputs.",
+    "accuracy": {"Random Forest": 0.9260, "XGBoost": 0.9285, "ANN": 0.9275}
+  }
+}
