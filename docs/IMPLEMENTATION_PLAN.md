@@ -305,7 +305,7 @@ The CSV and JSON inference workflow stays independent of all of the above.
 
 | Platform | Requirement / limitation |
 |---|---|
-| Windows | Scapy needs **Npcap** (https://npcap.com) installed in "WinPcap API-compatible mode". **Npcap is not installed on this machine**, so live capture will report "unavailable" until it is. With Npcap's "restrict to administrators" option, the backend must run elevated. Loopback capture needs Npcap's loopback adapter. Wi-Fi capture gives only this host's traffic (no monitor mode). |
+| Windows | Scapy needs **Npcap** (https://npcap.com) installed in "WinPcap API-compatible mode". **Verified 2026-10-22: Npcap 1.90 installed, service running, `AdminOnly=0`; a non-admin capture socket opened successfully on Wi-Fi** (`uv run --extra capture python -m major_project.services.capture_diagnostics`). With Npcap's "restrict to administrators" option, the backend must run elevated. Loopback capture needs Npcap's loopback adapter. Wi-Fi capture gives only this host's traffic (no monitor mode). |
 | Linux | Root, or `CAP_NET_RAW` + `CAP_NET_ADMIN` on the Python binary. |
 | WSL2 | Default NAT networking: WSL sees only the VM's virtual NIC, not the Windows host's Wi-Fi/Ethernet traffic. Mirrored networking mode changes this, but capture still needs root inside WSL. Run capture on Windows (Npcap) to monitor the host. |
 | Offline PCAP | No privileges and no Npcap needed (`scapy.utils.PcapReader` streams the file). |
@@ -395,7 +395,8 @@ Rules:
 | API endpoints, SQLite, alerts, dashboard aggregates | ⏳ phase 4 |
 | psutil interface discovery | ⏳ phase 5a (psutil installed) |
 | Offline PCAP analysis, flow extraction, compatibility report | ⏳ phases 5b–5c |
-| Live capture with bounded queue and clean shutdown | ⏳ phase 5d (needs Npcap on this machine for real use) |
+| Capture diagnostic (Scapy import, interfaces, open/close check, error classification) | ✅ `services/capture_diagnostics.py`, 30 mocked tests; real run: capture available on Wi-Fi |
+| Live capture with bounded queue and clean shutdown | ⏳ phase 5d |
 | Live inference | ⛔ blocked by feature incompatibility (7.5); needs retraining approval |
 | Frontend | ⏳ phase 6 |
 | README / ARCHITECTURE / setup docs | ⏳ phase 7 |
