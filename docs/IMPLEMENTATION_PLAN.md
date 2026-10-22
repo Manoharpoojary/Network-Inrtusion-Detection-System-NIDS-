@@ -1,7 +1,7 @@
 # Implementation Plan — AI-Powered IoT Network Intrusion Detection System
 
-Status: **Phase 1 complete. Evaluation verified against the dataset and notebook. Phase 2 (model loader +
-inference service + tests) complete.** See [MODEL_CARD.md](MODEL_CARD.md) for the verified metrics.
+Status: **All planned phases are implemented. Section 8 lists what is verified and what is still
+open.** Verified metrics are in [MODEL_CARD.md](MODEL_CARD.md).
 Date: 2026-10-22
 
 > **Update after the dataset and notebook were provided** (`src/major_project/training/`):
@@ -254,14 +254,14 @@ Frontend: `tsc --noEmit` + `vite build`; manual end-to-end check against the run
 | 1 | Inspect; verify evaluation against dataset and notebook (`scripts/reproduce_evaluation.py`) | ✅ done |
 | 2 | Model loader + inference service + tests (48 passing) | ✅ done |
 | 2b | Initial Git commit (3 local commits; artifacts byte-identical, `.gitattributes` prevents EOL rewrites) | ✅ done |
-| 3 | Explanation service: SHAP (optional) + tree-path fallback + tests | next |
-| 4 | FastAPI + SQLite (health, model info, predict, batch, CSV analysis, alerts, dashboard, model performance) + tests | planned |
-| 5a | Network-interface discovery (psutil) API + tests | planned |
-| 5b | Offline PCAP analysis → flow aggregation → 35-column extraction + tests | planned |
-| 5c | Schema validation + training-compatibility report + tests | planned |
-| 5d | Live capture (Scapy, bounded queue, stop, permission handling); inference gated off + mocked tests | planned |
-| 6 | React dashboard wired to every endpoint above | planned |
-| 7 | README, ARCHITECTURE.md, LIVE_FEATURE_COMPATIBILITY.md; final test/lint/build run | planned |
+| 3 | Explanation service: SHAP (optional) + tree-path fallback + tests | ✅ done (`2ef9ba2`) |
+| 4 | FastAPI + SQLite (health, model info, predict, batch, CSV analysis, alerts, dashboard, model performance) + tests | ✅ done (`eee9cb6`) |
+| 5a | Network-interface discovery (psutil) API + tests | ✅ done (`3df381e`) |
+| 5b | Offline PCAP analysis → flow aggregation → 35-column extraction + tests | ✅ done (`3df381e`, fix `2f69179`) |
+| 5c | Schema validation + training-compatibility report + tests | ✅ done (`3df381e`); verdict: incompatible |
+| 5d | Live capture (Scapy, bounded queue, stop, permission handling); inference gated off + mocked tests | ✅ done (`d249c6d`); not yet run on real traffic |
+| 6 | React dashboard wired to every endpoint above | ✅ done (`d83250a`); verified by component tests + end-to-end render against the running API |
+| 7 | README, ARCHITECTURE.md, LIVE_FEATURE_COMPATIBILITY.md; final test/lint/build run | ✅ done |
 
 The network backend (5a–5d) comes before the frontend so the dashboard's monitoring pages are built
 once, against real endpoints.
@@ -382,23 +382,24 @@ Rules:
 
 ---
 
-## 8. Requirement status (updated 2026-10-22)
+## 8. Requirement status (updated 2026-10-22; ✅ = implemented and verified)
 
-| Requirement | Status |
-|---|---|
-| Trusted model loads safely (hash pin + allow-list) | ✅ implemented, tested |
-| Exact 35-feature schema, order, categories; missing/extra/non-finite/unknown rejected | ✅ implemented, tested (service + API) |
-| Label mapping 0 = Benign, 1 = Attack; explicit threshold | ✅ verified, tested |
-| Verified metrics + ROC/PR data | ✅ `verified_metrics.json`, `GET /api/model/performance` |
-| Per-prediction explanations (SHAP optional, tree-path fallback) | ✅ implemented, tested with and without shap |
-| API: health, model info, importance, predict, batch, CSV analysis + results/export, alerts, dashboard summary/trends | ✅ implemented, tested (`tests/test_api_*.py`) |
-| SQLite persistence (analyses, predictions, alerts, network runs); UTC; indexes | ✅ implemented, tested (incl. restart persistence) |
-| Capture diagnostic (Scapy, Npcap, interfaces, open/close check) | ✅ implemented, tested; real run: capture available on Wi-Fi |
-| psutil interface discovery API (no addresses) | ✅ `GET /api/network/interfaces`, tested |
-| Offline PCAP/PCAPNG analysis with bounded limits and failure accounting | ✅ `POST /api/network/pcap`, tested on synthetic captures |
-| Flow-feature extraction + schema validation + training-compatibility report | ✅ implemented, tested; verdict: **incompatible** (see LIVE_FEATURE_COMPATIBILITY.md) |
-| Real-traffic PCAP analysed on this machine | ⏳ not done (needs a user-supplied, authorised capture) |
-| Live capture with bounded queue and clean shutdown | ⏳ next phase |
-| Live inference | ⛔ blocked by feature incompatibility; requires retraining approval |
-| Frontend | ⏳ planned |
-| README / ARCHITECTURE | ⏳ planned |
+| Requirement | Status | Evidence |
+|---|---|---|
+| Trusted model loads safely (hash pin + allow-list) | ✅ | `tests/test_model_loader.py` |
+| Exact 35-feature schema; missing/extra/non-finite/unknown values rejected | ✅ | `tests/test_inference.py`, `tests/test_api_predict.py` |
+| Label mapping 0 = Benign, 1 = Attack; explicit threshold | ✅ | notebook + `tests/test_reproduction.py` |
+| Verified metrics + ROC/PR data | ✅ | `verified_metrics.json`; held-out CSV through the dashboard proxy reproduced 925 attacks (TN 973 / FP 27 / FN 102 / TP 898) |
+| Per-prediction explanations (SHAP optional, tree-path fallback), separate from global importance | ✅ | `tests/test_explain.py` (with and without shap) |
+| API: health, model info, importance, predict, batch, CSV + results/export, alerts, dashboard summary/trends | ✅ | `tests/test_api_*.py`; real uvicorn run |
+| SQLite persistence; UTC; indexes; restart persistence | ✅ | `tests/test_api_alerts_dashboard.py` |
+| Capture diagnostic; psutil interface discovery (no addresses) | ✅ | tests + real run (capture available on Wi-Fi, non-admin) |
+| Offline PCAP/PCAPNG analysis; flow extraction; compatibility report | ✅ | `tests/test_network_api.py`, `tests/test_flow_features.py`; real server via proxy |
+| Live capture: start/stop/status, bounded queue, drop accounting, clean shutdown, error classification | ✅ (mocked) | `tests/test_capture_service.py`, `tests/test_live_api_security.py` |
+| Capture control local-only, optional token, authorisation flag; Origin and upload-size guards | ✅ | `tests/test_live_api_security.py`; checked through the proxy |
+| React dashboard on real API data with loading/error/empty states | ✅ | 12 component tests; 5 end-to-end render tests against the running API; production build |
+| README, ARCHITECTURE, MODEL_CARD, LIVE_FEATURE_COMPATIBILITY | ✅ | `docs/`, README commands executed |
+| Real-traffic PCAP analysed on this machine | ⏳ | needs a user-supplied, authorised capture |
+| Live capture session on real traffic | ⏳ | not started (no automatic capture); available on Wi-Fi |
+| Visual check in a real browser | ⏳ | not performed (jsdom only) |
+| Live inference | ⛔ | blocked by feature incompatibility; needs retraining approval |
