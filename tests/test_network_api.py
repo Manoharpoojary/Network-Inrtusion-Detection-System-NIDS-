@@ -170,3 +170,27 @@ def test_unknown_run(client):
 
 
 # ----------------------------------------------------------------------------- mapping, interfaces
+
+
+def test_fresh_process_dissects_ip_without_prior_scapy_imports(tmp_path, pcap_bytes):
+    """Regression: a new process must not classify IP packets as non-IP.
+
+    The server imports only parts of Scapy; IP-over-Ethernet dissection must still be registered.
+    """
+    import subprocess
+    import sys
+
+    path = tmp_path / "fresh.pcap"
+    path.write_bytes(pcap_bytes)
+    code = (
+        "import sys; from pathlib import Path;"
+        "from major_project.services.pcap_analysis import analyze_capture;"
+        "flows, s = analyze_capture(Path(sys.argv[1]).read_bytes(), 100, 100, 60, 300, 100);"
+        "assert 'scapy.all' not in sys.modules, 'test must not import scapy.all';"
+        "print(s.ip_packets, s.non_ip_packets, len(flows))"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code, str(path)], capture_output=True, text=True, timeout=120
+    )
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.split() == ["6", "1", "3"]

@@ -18,6 +18,7 @@ from major_project.services.flow_features import (
     FlowAggregator,
     MalformedPacketError,
     PacketMeta,
+    ensure_scapy_layers,
     packet_meta,
 )
 
@@ -62,6 +63,8 @@ class PcapStats:
 def scapy_reader(data: bytes) -> Iterable:
     try:
         from scapy.utils import PcapReader
+
+        ensure_scapy_layers()
     except ImportError as exc:
         raise CaptureLibraryUnavailableError(
             "Scapy is not installed; install the optional extra: uv sync --extra capture"

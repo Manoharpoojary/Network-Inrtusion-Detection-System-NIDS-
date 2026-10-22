@@ -34,6 +34,7 @@ from major_project.services.flow_features import (
     FlowAggregator,
     MalformedPacketError,
     PacketMeta,
+    ensure_scapy_layers,
     packet_meta,
 )
 
@@ -67,6 +68,8 @@ def scapy_sniffer_factory(
 ) -> Sniffer:
     try:
         from scapy.sendrecv import AsyncSniffer
+
+        ensure_scapy_layers()
     except ImportError as exc:
         raise CaptureError(
             503, "scapy_missing", "Scapy is not installed: uv sync --extra capture"

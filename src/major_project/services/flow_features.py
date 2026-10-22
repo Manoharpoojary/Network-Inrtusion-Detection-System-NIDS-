@@ -40,6 +40,17 @@ class PacketMeta:
     tcp_flags: str = ""
 
 
+def ensure_scapy_layers() -> None:
+    """Register Scapy's Ethernet/IP/TCP/UDP dissectors.
+
+    Scapy binds IP to Ethernet only when ``scapy.layers.inet`` is imported. Without this, packets
+    read or captured before that import are dissected as raw bytes and look like non-IP traffic.
+    """
+    import scapy.layers.inet
+    import scapy.layers.inet6
+    import scapy.layers.l2  # noqa: F401
+
+
 def packet_meta(pkt: Any) -> PacketMeta | None:
     """Extract header metadata from a Scapy packet. ``None`` for non-IP packets."""
     from scapy.layers.inet import ICMP, IP, TCP, UDP
