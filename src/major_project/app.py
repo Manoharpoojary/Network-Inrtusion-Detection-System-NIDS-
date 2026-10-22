@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from major_project.api.errors import install_error_handlers
 from major_project.api.routes import alerts, analyses, dashboard, network, predict, system
+from major_project.api.security import OriginAndSizeGuard
 from major_project.api.state import build_state
 from major_project.core.config import Settings, get_settings
 from major_project.core.logging import configure_logging
@@ -39,6 +40,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             yield
         finally:
+            if state.capture is not None:
+                state.capture.shutdown()
             state.db.dispose()
 
     app = FastAPI(
@@ -74,6 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 },
             )
 
+    app.add_middleware(OriginAndSizeGuard, settings=settings)
     install_error_handlers(app)
     for module in (system, predict, analyses, alerts, dashboard, network):
         app.include_router(module.router)

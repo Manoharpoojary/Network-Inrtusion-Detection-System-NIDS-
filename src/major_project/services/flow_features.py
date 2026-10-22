@@ -224,6 +224,10 @@ class FlowAggregator:
         state.add(m)
         return done
 
+    def expire(self, now: float) -> list[ExtractedFlow]:
+        """Finish flows idle at time ``now`` (used by live capture when no packets arrive)."""
+        return self._expire(now)
+
     def _expire(self, now: float) -> list[ExtractedFlow]:
         done = []
         while self._flows:

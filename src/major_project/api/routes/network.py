@@ -9,16 +9,19 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Query, UploadFile
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from major_project.api.deps import get_session, get_state
 from major_project.api.errors import ApiError
+from major_project.api.security import require_capture_control, require_local_client
 from major_project.api.state import AppState
 from major_project.database.models import NetworkRun
 from major_project.schemas.api import ErrorResponse
 from major_project.services import capture_diagnostics, compatibility, interfaces
+from major_project.services.capture_service import CaptureError
 from major_project.services.csv_analysis import safe_filename
 from major_project.services.pcap_analysis import (
     CaptureLibraryUnavailableError,
@@ -30,10 +33,19 @@ router = APIRouter(prefix="/api/network", tags=["network"])
 FLOW_SAMPLE = 100
 
 
-def _require_local(request: Request, state: AppState) -> None:
-    host = request.client.host if request.client else None
-    if host not in state.settings.local_control_hosts:
-        raise ApiError(403, "local_only", "This operation is only allowed from this machine.")
+# BPF filter syntax only (letters, digits, spaces, operators); passed to libpcap, never a shell.
+BPF_PATTERN = r"^[A-Za-z0-9 .:/()\[\]&|!<>=-]{1,200}$"
+
+
+class LiveStartRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    interface: str = Field(min_length=1, max_length=128)
+    bpf_filter: str | None = Field(None, pattern=BPF_PATTERN)
+    max_duration_seconds: int | None = Field(None, ge=1, le=3600)
+    authorized: bool = Field(
+        description="Must be true: you confirm you are authorised to monitor this interface."
+    )
 
 
 @router.get("/interfaces")
@@ -44,12 +56,10 @@ def list_interfaces() -> dict:
 
 @router.post("/capture-check", responses={403: {"model": ErrorResponse}})
 def capture_check(
-    request: Request,
     interface: str | None = Query(None, max_length=128),
-    state: AppState = Depends(get_state),
+    state: AppState = Depends(require_local_client),
 ) -> dict:
     """Open and immediately close one capture socket. No packets are read; nothing is stored."""
-    _require_local(request, state)
     report = capture_diagnostics.run_diagnostics(interface=interface, check=True)
     return {
         "scapy": report.scapy.__dict__,
@@ -195,3 +205,40 @@ def get_run(run_id: str, session: Session = Depends(get_session)) -> dict:
     if run is None:
         raise ApiError(404, "not_found", "Network run not found.")
     return _run_out(run, include_report=True)
+
+
+# ----------------------------------------------------------------------------- live capture
+
+_LIVE_ERRORS = {s: {"model": ErrorResponse} for s in (401, 403, 404, 409, 422, 503)}
+
+
+def _capture_call(fn, *args, **kwargs) -> dict:
+    try:
+        return fn(*args, **kwargs)
+    except CaptureError as exc:
+        raise ApiError(exc.status_code, exc.code, exc.message) from exc
+
+
+@router.get("/live/status", responses=_LIVE_ERRORS)
+def live_status(state: AppState = Depends(require_local_client)) -> dict:
+    """Current capture session: state, counters, queue, recent flows and compatibility."""
+    return state.capture.status()
+
+
+@router.post("/live/start", responses=_LIVE_ERRORS)
+def live_start(body: LiveStartRequest, state: AppState = Depends(require_capture_control)) -> dict:
+    """Start feature extraction on one interface. Flows are NOT scored by the model."""
+    if not body.authorized:
+        raise ApiError(
+            422,
+            "authorization_not_confirmed",
+            "Confirm you are authorised to monitor this interface (authorized: true).",
+        )
+    return _capture_call(
+        state.capture.start, body.interface, body.bpf_filter, body.max_duration_seconds
+    )
+
+
+@router.post("/live/stop", responses=_LIVE_ERRORS)
+def live_stop(state: AppState = Depends(require_capture_control)) -> dict:
+    return _capture_call(state.capture.stop)

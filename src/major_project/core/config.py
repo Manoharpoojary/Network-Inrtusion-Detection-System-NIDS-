@@ -57,6 +57,14 @@ class Settings(BaseSettings):
     # Clients allowed to trigger operations that open capture devices.
     local_control_hosts: list[str] = ["127.0.0.1", "::1"]
 
+    # Live capture (feature extraction only; flows are never scored).
+    capture_queue_size: int = Field(default=10_000, ge=10)
+    capture_max_duration_seconds: int = Field(default=600, ge=1, le=3600)
+    capture_recent_flows: int = Field(default=200, ge=1, le=5000)
+    # Optional shared secret for capture start/stop (header X-Capture-Token). Keep it in .env,
+    # never in source control.
+    capture_token: str | None = None
+
     database_url: str = DEFAULT_DATABASE_URL
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
