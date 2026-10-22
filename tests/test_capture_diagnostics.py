@@ -135,6 +135,7 @@ def test_interface_listing_flags_and_no_addresses():
     assert by_name["Loopback Pseudo-Interface 1"].is_loopback
     assert not by_name["Loopback Pseudo-Interface 1"].has_ipv4
     assert by_name["Ghost"].psutil_stats is True and by_name["Ghost"].description is None
+    assert by_name["Ghost"].visible_to_scapy is False and by_name["Wi-Fi"].visible_to_scapy
     assert any("Ghost" in n and "not visible to Scapy" in n for n in report.notes)
     dumped = json.dumps(report.as_dict())
     assert "192.0.2.10" not in dumped and "00:11:22:33:44:55" not in dumped

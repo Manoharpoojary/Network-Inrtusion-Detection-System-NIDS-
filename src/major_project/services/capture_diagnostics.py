@@ -67,6 +67,7 @@ class InterfaceInfo:
     is_wireless: bool
     has_ipv4: bool  # a usable IPv4 (not 0.0.0.0 or 169.254/16 link-local)
     psutil_stats: bool  # psutil reports this interface (statistics available)
+    visible_to_scapy: bool = True  # listed by Scapy, so selectable for capture
 
 
 @dataclass
@@ -228,6 +229,7 @@ def list_interfaces(
                     is_wireless=False,
                     has_ipv4=False,
                     psutil_stats=True,
+                    visible_to_scapy=False,
                 )
             )
             notes.append(f"Interface {name!r} is not visible to Scapy and cannot be captured.")

@@ -1,0 +1,439 @@
+{
+  "generated_at": "2026-10-22T13:11:45.415131+00:00",
+  "description": "Training split (8,000 rows) of the notebook's 80/20 split. Summary only.",
+  "model_sha256": "2557ad7b7b25f76f877f9048889d0de8b062672ea7743e380bcf3e5190173cde",
+  "dataset_sha256": "9742aa887c7cfc9c405bbceb0b10ec959053347d14ef3ffef8093bb50bc5c6de",
+  "rows": 8000,
+  "features": {
+    "flgs": {
+      "kind": "categorical",
+      "frequencies": {
+        "PA": 4738,
+        "U": 2768,
+        "S": 494
+      }
+    },
+    "flgs_number": {
+      "kind": "numeric",
+      "min": 1.0,
+      "p01": 1.0,
+      "median": 1.0,
+      "p99": 1.0,
+      "max": 1.0,
+      "constant": true
+    },
+    "proto": {
+      "kind": "categorical",
+      "frequencies": {
+        "HTTPS": 1741,
+        "HTTP": 1690,
+        "NTP": 1245,
+        "DNS": 1200,
+        "TCP": 497,
+        "ICMP": 494,
+        "MQTT": 351,
+        "RTSP": 283,
+        "CoAP": 221,
+        "SMB": 176,
+        "SSDP": 102
+      }
+    },
+    "proto_number": {
+      "kind": "numeric",
+      "min": 1.0,
+      "p01": 1.0,
+      "median": 6.0,
+      "p99": 17.0,
+      "max": 17.0,
+      "constant": false
+    },
+    "sport": {
+      "kind": "numeric",
+      "min": 1024.0,
+      "p01": 1672.98,
+      "median": 33188.0,
+      "p99": 64834.19,
+      "max": 65531.0,
+      "constant": false
+    },
+    "dport": {
+      "kind": "numeric",
+      "min": 0.0,
+      "p01": 0.0,
+      "median": 123.0,
+      "p99": 5683.0,
+      "max": 5683.0,
+      "constant": false
+    },
+    "pkts": {
+      "kind": "numeric",
+      "min": 5.0,
+      "p01": 5.0,
+      "median": 39.0,
+      "p99": 99.0,
+      "max": 100.0,
+      "constant": false
+    },
+    "bytes": {
+      "kind": "numeric",
+      "min": 300.0,
+      "p01": 386.0,
+      "median": 3627.5,
+      "p99": 9812.03,
+      "max": 9998.0,
+      "constant": false
+    },
+    "dur": {
+      "kind": "numeric",
+      "min": 0.01,
+      "p01": 0.037,
+      "median": 0.943,
+      "p99": 2.45201,
+      "max": 2.5,
+      "constant": false
+    },
+    "mean": {
+      "kind": "numeric",
+      "min": 6.804347826,
+      "p01": 11.811711579,
+      "median": 93.085480265,
+      "p99": 588.4305356860001,
+      "max": 992.0,
+      "constant": false
+    },
+    "stddev": {
+      "kind": "numeric",
+      "min": 0.100365521,
+      "p01": 0.11421618224,
+      "median": 0.796759607,
+      "p99": 1.4857609563,
+      "max": 1.499757009,
+      "constant": false
+    },
+    "sum": {
+      "kind": "numeric",
+      "min": 300.0,
+      "p01": 386.0,
+      "median": 3627.5,
+      "p99": 9812.03,
+      "max": 9998.0,
+      "constant": false
+    },
+    "min": {
+      "kind": "numeric",
+      "min": 40.0,
+      "p01": 40.0,
+      "median": 50.0,
+      "p99": 60.0,
+      "max": 60.0,
+      "constant": false
+    },
+    "max": {
+      "kind": "numeric",
+      "min": 500.0,
+      "p01": 504.0,
+      "median": 751.0,
+      "p99": 995.0,
+      "max": 1000.0,
+      "constant": false
+    },
+    "spkts": {
+      "kind": "numeric",
+      "min": 2.0,
+      "p01": 2.0,
+      "median": 19.0,
+      "p99": 49.0,
+      "max": 50.0,
+      "constant": false
+    },
+    "dpkts": {
+      "kind": "numeric",
+      "min": 2.0,
+      "p01": 2.0,
+      "median": 19.0,
+      "p99": 49.0,
+      "max": 50.0,
+      "constant": false
+    },
+    "sbytes": {
+      "kind": "numeric",
+      "min": 150.0,
+      "p01": 193.0,
+      "median": 1813.5,
+      "p99": 4906.01,
+      "max": 4999.0,
+      "constant": false
+    },
+    "dbytes": {
+      "kind": "numeric",
+      "min": 150.0,
+      "p01": 193.0,
+      "median": 1813.5,
+      "p99": 4906.01,
+      "max": 4999.0,
+      "constant": false
+    },
+    "rate": {
+      "kind": "numeric",
+      "min": 128.23,
+      "p01": 267.3692,
+      "median": 4075.4300000000003,
+      "p99": 130628.38710000021,
+      "max": 789090.91,
+      "constant": false
+    },
+    "srate": {
+      "kind": "numeric",
+      "min": 63.91,
+      "p01": 133.2717,
+      "median": 2037.225,
+      "p99": 65314.19350000011,
+      "max": 394545.45,
+      "constant": false
+    },
+    "drate": {
+      "kind": "numeric",
+      "min": 63.91,
+      "p01": 133.2717,
+      "median": 2037.225,
+      "p99": 65314.19350000011,
+      "max": 394545.45,
+      "constant": false
+    },
+    "TnBPSrcIP": {
+      "kind": "numeric",
+      "min": 1.0,
+      "p01": 1.0,
+      "median": 1.0,
+      "p99": 1.0,
+      "max": 1.0,
+      "constant": true
+    },
+    "TnBPDstIP": {
+      "kind": "numeric",
+      "min": 1.0,
+      "p01": 1.0,
+      "median": 1.0,
+      "p99": 1.0,
+      "max": 1.0,
+      "constant": true
+    },
+    "TnP_PSrcIP": {
+      "kind": "numeric",
+      "min": 1.0,
+      "p01": 1.0,
+      "median": 1.0,
+      "p99": 1.0,
+      "max": 1.0,
+      "constant": true
+    },
+    "TnP_PDstIP": {
+      "kind": "numeric",
+      "min": 1.0,
+      "p01": 1.0,
+      "median": 1.0,
+      "p99": 1.0,
+      "max": 1.0,
+      "constant": true
+    },
+    "TnP_PerProto": {
+      "kind": "numeric",
+      "min": 1.0,
+      "p01": 1.0,
+      "median": 1.0,
+      "p99": 1.0,
+      "max": 1.0,
+      "constant": true
+    },
+    "TnP_Per_Dport": {
+      "kind": "numeric",
+      "min": 1.0,
+      "p01": 1.0,
+      "median": 1.0,
+      "p99": 1.0,
+      "max": 1.0,
+      "constant": true
+    },
+    "AR_P_Proto_P_SrcIP": {
+      "kind": "numeric",
+      "min": 1.0,
+      "p01": 1.0,
+      "median": 1.0,
+      "p99": 1.0,
+      "max": 1.0,
+      "constant": true
+    },
+    "AR_P_Proto_P_DstIP": {
+      "kind": "numeric",
+      "min": 1.0,
+      "p01": 1.0,
+      "median": 1.0,
+      "p99": 1.0,
+      "max": 1.0,
+      "constant": true
+    },
+    "N_IN_Conn_P_DstIP": {
+      "kind": "numeric",
+      "min": 1.0,
+      "p01": 1.0,
+      "median": 1.0,
+      "p99": 1.0,
+      "max": 1.0,
+      "constant": true
+    },
+    "N_IN_Conn_P_SrcIP": {
+      "kind": "numeric",
+      "min": 1.0,
+      "p01": 1.0,
+      "median": 1.0,
+      "p99": 1.0,
+      "max": 1.0,
+      "constant": true
+    },
+    "AR_P_Proto_P_Sport": {
+      "kind": "numeric",
+      "min": 1.0,
+      "p01": 1.0,
+      "median": 1.0,
+      "p99": 1.0,
+      "max": 1.0,
+      "constant": true
+    },
+    "AR_P_Proto_P_Dport": {
+      "kind": "numeric",
+      "min": 1.0,
+      "p01": 1.0,
+      "median": 1.0,
+      "p99": 1.0,
+      "max": 1.0,
+      "constant": true
+    },
+    "Pkts_P_State_P_Protocol_P_DestIP": {
+      "kind": "numeric",
+      "min": 1.0,
+      "p01": 1.0,
+      "median": 1.0,
+      "p99": 1.0,
+      "max": 1.0,
+      "constant": true
+    },
+    "Pkts_P_State_P_Protocol_P_SrcIP": {
+      "kind": "numeric",
+      "min": 1.0,
+      "p01": 1.0,
+      "median": 1.0,
+      "p99": 1.0,
+      "max": 1.0,
+      "constant": true
+    }
+  },
+  "invariants": {
+    "spkts_equals_dpkts": {
+      "rule": "spkts == dpkts",
+      "share": 1.0
+    },
+    "sbytes_equals_dbytes": {
+      "rule": "sbytes == dbytes",
+      "share": 1.0
+    },
+    "spkts_is_half_pkts": {
+      "rule": "spkts == pkts // 2",
+      "share": 1.0
+    },
+    "sbytes_is_half_bytes": {
+      "rule": "sbytes == bytes // 2",
+      "share": 1.0
+    },
+    "sum_equals_bytes": {
+      "rule": "sum == bytes",
+      "share": 1.0
+    },
+    "mean_is_bytes_per_packet": {
+      "rule": "mean == bytes / pkts",
+      "share": 1.0
+    },
+    "rate_is_bytes_per_second": {
+      "rule": "rate == bytes / dur",
+      "share": 1.0
+    },
+    "srate_equals_drate": {
+      "rule": "srate == drate",
+      "share": 1.0
+    },
+    "mean_within_min_max": {
+      "rule": "min <= mean <= max",
+      "share": 0.76275
+    }
+  },
+  "flgs_by_proto": {
+    "CoAP": [
+      "U"
+    ],
+    "DNS": [
+      "U"
+    ],
+    "HTTP": [
+      "PA"
+    ],
+    "HTTPS": [
+      "PA"
+    ],
+    "ICMP": [
+      "S"
+    ],
+    "MQTT": [
+      "PA"
+    ],
+    "NTP": [
+      "U"
+    ],
+    "RTSP": [
+      "PA"
+    ],
+    "SMB": [
+      "PA"
+    ],
+    "SSDP": [
+      "U"
+    ],
+    "TCP": [
+      "PA"
+    ]
+  },
+  "dport_by_proto": {
+    "CoAP": [
+      5683
+    ],
+    "DNS": [
+      53
+    ],
+    "HTTP": [
+      80
+    ],
+    "HTTPS": [
+      443
+    ],
+    "ICMP": [
+      0
+    ],
+    "MQTT": [
+      1883
+    ],
+    "NTP": [
+      123
+    ],
+    "RTSP": [
+      554
+    ],
+    "SMB": [
+      139,
+      445
+    ],
+    "SSDP": [
+      1900
+    ],
+    "TCP": [
+      445
+    ]
+  }
+}

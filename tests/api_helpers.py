@@ -27,11 +27,18 @@ def attackish(record: dict) -> dict:
 
 
 @contextmanager
-def api_client(tmp_path: Path, raise_server_exceptions: bool = True, **overrides):
+def api_client(
+    tmp_path: Path,
+    raise_server_exceptions: bool = True,
+    client_host: str = "testclient",
+    **overrides,
+):
     overrides.setdefault("log_level", "WARNING")
     settings = Settings(database_url=f"sqlite:///{(tmp_path / 'test.db').as_posix()}", **overrides)
     app = create_app(settings)
-    with TestClient(app, raise_server_exceptions=raise_server_exceptions) as client:
+    with TestClient(
+        app, raise_server_exceptions=raise_server_exceptions, client=(client_host, 50000)
+    ) as client:
         yield client
 
 

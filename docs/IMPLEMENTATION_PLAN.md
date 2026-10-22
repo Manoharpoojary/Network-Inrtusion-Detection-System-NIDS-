@@ -382,21 +382,23 @@ Rules:
 
 ---
 
-## 8. Requirement status (2026-10-22)
+## 8. Requirement status (updated 2026-10-22)
 
 | Requirement | Status |
 |---|---|
 | Trusted model loads safely (hash pin + allow-list) | ✅ implemented, tested |
-| Exact 35-feature schema, order, categories; missing/extra/non-finite/unknown rejected | ✅ implemented, tested |
-| Single/batch prediction logic with explicit threshold | ✅ service implemented, tested (API pending) |
-| Label mapping 0 = Benign, 1 = Attack | ✅ verified from notebook, tested |
-| Verified metrics + ROC/PR data | ✅ `verified_metrics.json`, `MODEL_CARD.md` |
-| Per-prediction explanations | ⏳ evaluated (3.3); implementation in phase 3 |
-| API endpoints, SQLite, alerts, dashboard aggregates | ⏳ phase 4 |
-| psutil interface discovery | ⏳ phase 5a (psutil installed) |
-| Offline PCAP analysis, flow extraction, compatibility report | ⏳ phases 5b–5c |
-| Capture diagnostic (Scapy import, interfaces, open/close check, error classification) | ✅ `services/capture_diagnostics.py`, 30 mocked tests; real run: capture available on Wi-Fi |
-| Live capture with bounded queue and clean shutdown | ⏳ phase 5d |
-| Live inference | ⛔ blocked by feature incompatibility (7.5); needs retraining approval |
-| Frontend | ⏳ phase 6 |
-| README / ARCHITECTURE / setup docs | ⏳ phase 7 |
+| Exact 35-feature schema, order, categories; missing/extra/non-finite/unknown rejected | ✅ implemented, tested (service + API) |
+| Label mapping 0 = Benign, 1 = Attack; explicit threshold | ✅ verified, tested |
+| Verified metrics + ROC/PR data | ✅ `verified_metrics.json`, `GET /api/model/performance` |
+| Per-prediction explanations (SHAP optional, tree-path fallback) | ✅ implemented, tested with and without shap |
+| API: health, model info, importance, predict, batch, CSV analysis + results/export, alerts, dashboard summary/trends | ✅ implemented, tested (`tests/test_api_*.py`) |
+| SQLite persistence (analyses, predictions, alerts, network runs); UTC; indexes | ✅ implemented, tested (incl. restart persistence) |
+| Capture diagnostic (Scapy, Npcap, interfaces, open/close check) | ✅ implemented, tested; real run: capture available on Wi-Fi |
+| psutil interface discovery API (no addresses) | ✅ `GET /api/network/interfaces`, tested |
+| Offline PCAP/PCAPNG analysis with bounded limits and failure accounting | ✅ `POST /api/network/pcap`, tested on synthetic captures |
+| Flow-feature extraction + schema validation + training-compatibility report | ✅ implemented, tested; verdict: **incompatible** (see LIVE_FEATURE_COMPATIBILITY.md) |
+| Real-traffic PCAP analysed on this machine | ⏳ not done (needs a user-supplied, authorised capture) |
+| Live capture with bounded queue and clean shutdown | ⏳ next phase |
+| Live inference | ⛔ blocked by feature incompatibility; requires retraining approval |
+| Frontend | ⏳ planned |
+| README / ARCHITECTURE | ⏳ planned |

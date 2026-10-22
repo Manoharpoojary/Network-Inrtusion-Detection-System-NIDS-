@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
@@ -82,6 +82,28 @@ class Prediction(Base):
 
     analysis: Mapped[Analysis] = relationship(back_populates="predictions")
     alert: Mapped[Alert | None] = relationship(back_populates="prediction", uselist=False)
+
+
+class NetworkRun(Base):
+    """An offline PCAP analysis (later also live sessions). Counters and the report only."""
+
+    __tablename__ = "network_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    kind: Mapped[str] = mapped_column(String(16), index=True)  # pcap | live
+    filename: Mapped[str | None] = mapped_column(String(128))
+    status: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, index=True)
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    packets_read: Mapped[int] = mapped_column(Integer, default=0)
+    ip_packets: Mapped[int] = mapped_column(Integer, default=0)
+    non_ip_packets: Mapped[int] = mapped_column(Integer, default=0)
+    malformed_packets: Mapped[int] = mapped_column(Integer, default=0)
+    dropped_packets: Mapped[int] = mapped_column(Integer, default=0)
+    flows_extracted: Mapped[int] = mapped_column(Integer, default=0)
+    compatible: Mapped[bool] = mapped_column(Boolean, default=False)
+    stats_json: Mapped[str] = mapped_column(Text)
+    report_json: Mapped[str] = mapped_column(Text)
 
 
 class Alert(Base):

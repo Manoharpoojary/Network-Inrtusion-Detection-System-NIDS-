@@ -47,6 +47,16 @@ class Settings(BaseSettings):
     # Alerts explained while a request is processed; the rest are explained when first opened.
     max_eager_explanations: int = Field(default=50, ge=0)
 
+    # Offline PCAP analysis and flow extraction.
+    max_pcap_bytes: int = Field(default=50 * 1024 * 1024, ge=1024)
+    max_pcap_packets: int = Field(default=1_000_000, ge=1)
+    max_flows_analyzed: int = Field(default=100_000, ge=1)
+    flow_idle_timeout_seconds: float = Field(default=60.0, gt=0)
+    flow_active_timeout_seconds: float = Field(default=300.0, gt=0)
+    max_active_flows: int = Field(default=50_000, ge=1)
+    # Clients allowed to trigger operations that open capture devices.
+    local_control_hosts: list[str] = ["127.0.0.1", "::1"]
+
     database_url: str = DEFAULT_DATABASE_URL
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
