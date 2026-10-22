@@ -31,6 +31,11 @@ class Settings(BaseSettings):
 
     max_batch_records: int = Field(default=1000, ge=1)
 
+    # "auto" uses SHAP when the optional `explain` extra is installed, otherwise tree-path
+    # contributions. "shap_tree" / "tree_path" force one method.
+    explanation_method: str = "auto"
+    explanation_top_k: int = Field(default=8, ge=1, le=35)
+
     # Live capture can be wired up, but inference on live flows stays off until the extracted
     # features are shown to match the training semantics (see docs/MODEL_CARD.md).
     live_inference_enabled: bool = False
