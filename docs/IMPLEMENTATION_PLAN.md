@@ -129,6 +129,9 @@ Caveats:
 
 ## 2. Critical risk: live-capture compatibility
 
+> Superseded in detail by **section 7**, which defines the network-monitoring requirements and
+> records the measured feature definitions. The original Phase 1 note follows.
+
 The model was trained on a dataset whose feature semantics cannot be reproduced from real packets:
 symmetric src/dst counters, constant aggregate features, app-layer `proto` labels, and an
 unspecified flow-aggregation window/units for `dur`, `rate`, `mean`, `stddev`. A Scapy/CICFlowMeter
@@ -198,12 +201,22 @@ categories. Inference runs in a thread pool (`run_in_threadpool`) so the event l
 
 - Severity (env-configurable): `info` = predicted benign; `medium` = attack with P(attack) < 0.80;
   `high` = attack with P(attack) ≥ 0.80. Documented as rule-based, not calibrated risk.
-- Per-prediction explanation: **SHAP `TreeExplainer`** is exactly compatible with this RF and is
-  fast for 100 trees / 47 features (~ms per row). It adds `shap` (+ `numba`) as dependencies.
-  Alternative without new deps: tree-path contribution decomposition implemented directly on the
-  sklearn trees (mathematically the "Saabas" method). Recommendation: SHAP for single predictions and
-  alert details, global importance clearly labeled as global elsewhere. Explanations are mapped back to
-  the 35 original columns (one-hot contributions summed per categorical).
+- **Per-prediction explanation (decided 2026-10-22, measured on this machine):**
+
+  | Method | Dependency | Latency | Memory | Exactness |
+  |---|---|---|---|---|
+  | SHAP `TreeExplainer` (path-dependent) | optional extra `explain` (`shap` 0.54.1, ~3 MB, no numba) | ~19 ms/row, linear in rows | +~23 MB RSS | base + Σ SHAP = P(attack), error 4e-13 |
+  | Tree-path contributions ("Saabas") | none | ~3 ms/row | negligible | base + Σ = P(attack), exact |
+
+  - SHAP is used when installed; otherwise the tree-path method is used. Every explanation is labelled
+    with the method used.
+  - Explanations run on the transformed 47 features. One-hot contributions are summed back to the 35
+    original columns, and the raw input values are shown alongside.
+  - SHAP is computed for single/batch API predictions and for attack alerts, capped per CSV upload; it is
+    **not** computed for every benign CSV row (50k rows × 19 ms ≈ 16 min).
+  - The UI wording is "features that pushed this model's score up/down". An explanation is **not
+    evidence that a flow is malicious**. Global feature importance is shown separately and labelled as
+    describing the model overall.
 
 ### 3.4 Database (SQLite via SQLAlchemy, `NIDS_DATABASE_URL`)
 
@@ -215,8 +228,11 @@ Schema created with `metadata.create_all` (documented; Alembic can be added for 
 
 ### 3.5 New dependencies (pinned in `pyproject.toml` via `uv add`)
 
-Runtime: fastapi, uvicorn[standard], pydantic-settings, sqlalchemy, python-multipart, (shap),
-scapy (optional extra `live`). Dev: pytest, httpx, ruff. Frontend via npm in `src/frontend`.
+Already installed: scikit-learn 1.6.1, numpy 2.2.6, pandas 2.3.3, joblib 1.6.0, pydantic 2.14,
+pydantic-settings 2.16, psutil 7.2.2; optional extra `explain`: shap 0.54.1; dev: pytest 8.4, ruff 0.17.
+
+To add: fastapi, uvicorn[standard], sqlalchemy 2.x, python-multipart; scapy as optional extra `capture`;
+httpx (dev). Frontend via npm in `src/frontend`.
 No TensorFlow/PyTorch/XGBoost — not needed by the selected RF model.
 
 ---
@@ -233,20 +249,153 @@ Frontend: `tsc --noEmit` + `vite build`; manual end-to-end check against the run
 
 ## 5. Phases
 
-1. ✅ Inspect (this document), then verify the evaluation against the dataset and notebook
-   (`scripts/reproduce_evaluation.py`)
-2. ✅ Model loader (`services/model_loader.py`) + inference service (`services/inference.py`) +
-   tests (48 passing)
-3. FastAPI + SQLite + alerts + CSV analysis + tests
-4. React dashboard wired to the API
-5. Live-monitoring module (gated) + compatibility report + mocked tests
-6. README, ARCHITECTURE.md, MODEL_CARD.md, final test/lint run
+| # | Phase | Status |
+|---|---|---|
+| 1 | Inspect; verify evaluation against dataset and notebook (`scripts/reproduce_evaluation.py`) | ✅ done |
+| 2 | Model loader + inference service + tests (48 passing) | ✅ done |
+| 2b | Initial Git commit (3 local commits; artifacts byte-identical, `.gitattributes` prevents EOL rewrites) | ✅ done |
+| 3 | Explanation service: SHAP (optional) + tree-path fallback + tests | next |
+| 4 | FastAPI + SQLite (health, model info, predict, batch, CSV analysis, alerts, dashboard, model performance) + tests | planned |
+| 5a | Network-interface discovery (psutil) API + tests | planned |
+| 5b | Offline PCAP analysis → flow aggregation → 35-column extraction + tests | planned |
+| 5c | Schema validation + training-compatibility report + tests | planned |
+| 5d | Live capture (Scapy, bounded queue, stop, permission handling); inference gated off + mocked tests | planned |
+| 6 | React dashboard wired to every endpoint above | planned |
+| 7 | README, ARCHITECTURE.md, LIVE_FEATURE_COMPATIBILITY.md; final test/lint/build run | planned |
+
+The network backend (5a–5d) comes before the frontend so the dashboard's monitoring pages are built
+once, against real endpoints.
 
 ## 6. Open questions for the project owner
 
 1. ~~Dataset / notebook~~: provided and verified.
 2. ~~Live monitoring~~: decided. Build the module, but keep live inference disabled until feature
    compatibility is demonstrated.
-3. **Explainability:** OK to add `shap`?
-4. **Git baseline:** the repo has no commits. May I make an initial commit of the current state
-   before Phase 2 so every later change is reviewable?
+3. ~~Explainability~~: SHAP approved as an optional extra; evaluated in 3.3.
+4. ~~Git baseline~~: done. Commits `479b57e`, `45ddf5e`, `f1e391a`. Not pushed; there is no remote.
+
+---
+
+## 7. Network-information and monitoring requirements (added 2026-10-22)
+
+### 7.1 Required order
+
+1. Network-interface discovery
+2. Offline PCAP analysis
+3. Flow-feature extraction and schema validation
+4. Comparison against the training feature schema
+5. Live packet capture in an authorised test environment
+6. Live inference **only after** compatibility is demonstrated
+
+The CSV and JSON inference workflow stays independent of all of the above.
+
+### 7.2 Interface discovery (psutil)
+
+- `psutil.net_if_addrs()`, `net_if_stats()` and `net_io_counters(pernic=True)` supply the name, up/down
+  state, MTU, speed and byte/packet/error/drop counters.
+- Statistics that aren't supported for an interface are returned as `null`; a failure on one interface
+  doesn't fail the request.
+- Interface addresses are shown only to the local user. Nothing is persisted.
+- Separately, each interface is checked for whether Scapy/Npcap can open it for capture (5d). An
+  interface being "up" in psutil does not mean it is capturable.
+- On this machine, psutil reports 7 interfaces: Wi-Fi and Loopback are up; Ethernet, Bluetooth and
+  "Local Area Connection*" are down; vEthernet (WSL) is up.
+
+### 7.3 Packet capture: platform requirements
+
+| Platform | Requirement / limitation |
+|---|---|
+| Windows | Scapy needs **Npcap** (https://npcap.com) installed in "WinPcap API-compatible mode". **Npcap is not installed on this machine**, so live capture will report "unavailable" until it is. With Npcap's "restrict to administrators" option, the backend must run elevated. Loopback capture needs Npcap's loopback adapter. Wi-Fi capture gives only this host's traffic (no monitor mode). |
+| Linux | Root, or `CAP_NET_RAW` + `CAP_NET_ADMIN` on the Python binary. |
+| WSL2 | Default NAT networking: WSL sees only the VM's virtual NIC, not the Windows host's Wi-Fi/Ethernet traffic. Mirrored networking mode changes this, but capture still needs root inside WSL. Run capture on Windows (Npcap) to monitor the host. |
+| Offline PCAP | No privileges and no Npcap needed (`scapy.utils.PcapReader` streams the file). |
+
+Rules:
+
+- Capture is opt-in per session, on one explicitly selected interface, and only from localhost
+  (the API binds to 127.0.0.1; capture endpoints need a local token).
+- A BPF filter is optional. Payloads are never stored or logged: only header fields are read, and only to
+  update flow counters.
+- Capture is never assumed possible on every interface. Each start attempt reports a specific reason
+  on failure: no Npcap/libpcap, permission denied, interface not found or down.
+
+### 7.4 Flow-feature extraction: tool decision
+
+| Option | Assessment |
+|---|---|
+| CICFlowMeter (Java, or the `cicflowmeter` PyPI port) | Emits about 80 CIC-IDS2017 features (`Flow Duration` in µs, `Tot Fwd Pkts`, ...). **None** of the 35 model inputs are produced under the same name and definition. Adds Java, or a Scapy-pinned port, for no benefit. Rejected. |
+| Argus (`argus` + `ra`) | The original Bot-IoT tooling, so names match. But this dataset's values do **not** follow Argus definitions (table below), it isn't available natively on Windows, and it would be a second overlapping tool. Rejected. |
+| **Small Scapy-based flow aggregator (chosen)** | One tool (Scapy) for both PCAP and live. Bidirectional 5-tuple flows with an idle timeout and an active timeout. Emits exactly the 35 columns in model order, each with a documented formula and a compatibility status per feature. |
+
+### 7.5 Measured feature definitions in the training data (all 10,000 rows)
+
+| Feature | Definition actually present in the data | Reproducible from real packets? |
+|---|---|---|
+| `pkts`, `bytes`, `dur` (s) | Totals and duration | ✅ (window/timeout semantics unknown) |
+| `mean` | `bytes / pkts` (100 %) | ✅ |
+| `sum` | `= bytes` (100 %) | ✅ |
+| `rate` | `bytes / dur`, **bytes per second** (100 %). Argus uses packets/s. | ✅ |
+| `spkts`, `dpkts` | **both** `= pkts // 2` (100 %) | ❌ Real flows are asymmetric. Copying would mean inventing values. |
+| `sbytes`, `dbytes`, `srate`, `drate` | **both** `= bytes // 2` (and `/ dur`) | ❌ Same reason |
+| `min`, `max` | 40–60 and 500–1000. `mean` lies outside [min, max] on **23.7 %** of rows. | ❌ Physically impossible for packet sizes, so the definition is unknown |
+| `stddev` | 0.10–1.50, independent of the size spread | ❌ Definition unknown |
+| `flgs` | Determined by protocol: TCP→PA, UDP→U, ICMP→S | ⚠️ Only by copying the dataset's rule, not from real flags |
+| `proto` | Application label (HTTP, MQTT, …) fixed to one `dport` each | ⚠️ Port-based guess only |
+| `proto_number` | IANA number (6/17/1) | ✅ |
+| 15 aggregates + `flgs_number` | Constant 1 | ⚠️ Constant; the model ignores them |
+
+**Consequence:**
+
+- Live and PCAP-extracted features **cannot be made compatible** with this model without inventing
+  values: symmetric halves, `min`/`max`/`stddev`.
+- The compatibility check (step 4) will therefore report **incompatible**. Live and PCAP flows will be
+  shown as *extracted features only, not scored*.
+- The inference gate stays closed in code, regardless of `NIDS_LIVE_INFERENCE_ENABLED`, until a
+  compatibility report passes.
+- Making live inference possible would require retraining on features defined from real flows. That is
+  a model change and needs your explicit approval.
+
+### 7.6 Reliability
+
+- **Queue:** a bounded `queue.Queue` (configurable, default 10,000 packets). On overflow, packets are
+  counted as dropped and never silently discarded.
+- **Flow table:** bounded (default 50,000 active flows). Evicted flows are counted.
+- **Malformed or non-IP packets:** counted and skipped.
+- **Extractor errors:** counted and logged without packet content.
+- **Shutdown:** a stop event plus `AsyncSniffer.stop()` on shutdown, with a join timeout; the session
+  status becomes `stopped` or `error` with a reason.
+- **Session accounting** (persisted): packets seen / parsed / malformed / dropped, flows emitted /
+  evicted, start and stop times (UTC). No IPs, no payloads.
+- **PCAP upload:** size limit (default 50 MB) and packet limit (default 1,000,000), streamed rather
+  than loaded into memory.
+
+### 7.7 Tests (no admin rights or network needed)
+
+- Interface discovery with mocked psutil: normal, missing stats, psutil error.
+- Capture start with mocked Scapy:
+  - Npcap/libpcap missing, `PermissionError`, unknown interface;
+  - queue overflow accounting, stop and join, clean shutdown.
+- Flow aggregator on synthetic packets built in memory with Scapy (labelled synthetic), and on a
+  generated PCAP written to `tmp_path`: timeouts, bidirectional keys, formulas, malformed packets.
+- Compatibility checker: verifies the incompatible features are reported, and that the inference gate
+  refuses to score.
+
+---
+
+## 8. Requirement status (2026-10-22)
+
+| Requirement | Status |
+|---|---|
+| Trusted model loads safely (hash pin + allow-list) | ✅ implemented, tested |
+| Exact 35-feature schema, order, categories; missing/extra/non-finite/unknown rejected | ✅ implemented, tested |
+| Single/batch prediction logic with explicit threshold | ✅ service implemented, tested (API pending) |
+| Label mapping 0 = Benign, 1 = Attack | ✅ verified from notebook, tested |
+| Verified metrics + ROC/PR data | ✅ `verified_metrics.json`, `MODEL_CARD.md` |
+| Per-prediction explanations | ⏳ evaluated (3.3); implementation in phase 3 |
+| API endpoints, SQLite, alerts, dashboard aggregates | ⏳ phase 4 |
+| psutil interface discovery | ⏳ phase 5a (psutil installed) |
+| Offline PCAP analysis, flow extraction, compatibility report | ⏳ phases 5b–5c |
+| Live capture with bounded queue and clean shutdown | ⏳ phase 5d (needs Npcap on this machine for real use) |
+| Live inference | ⛔ blocked by feature incompatibility (7.5); needs retraining approval |
+| Frontend | ⏳ phase 6 |
+| README / ARCHITECTURE / setup docs | ⏳ phase 7 |
