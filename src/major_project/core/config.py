@@ -2,7 +2,6 @@
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -74,10 +73,8 @@ class Settings(BaseSettings):
     live_model_path: Path = DEFAULT_LIVE_MODEL_PATH
     live_model_sha256: str = DEFAULT_LIVE_MODEL_SHA256
     live_anomaly_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
-    # Unit for Flow_Duration / Flow_IAT_*: microseconds (CICFlowMeter / IoTID20 convention).
-    live_time_unit: Literal["microseconds", "milliseconds", "seconds"] = "microseconds"
-    live_flow_idle_timeout_seconds: float = Field(default=5.0, gt=0)
-    live_flow_active_timeout_seconds: float = Field(default=60.0, gt=0)
+    # Flows for the live model are built exactly like its training extractor (0.1 s windows,
+    # microseconds, IP packet lengths); see services/live_detection.py.
 
     database_url: str = DEFAULT_DATABASE_URL
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]

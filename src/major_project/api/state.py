@@ -73,7 +73,6 @@ def build_state(settings: Settings) -> AppState:
         state.detector = LiveDetector(
             load_live_model(settings.live_model_path, settings.live_model_sha256),
             settings.live_anomaly_threshold,
-            settings.live_time_unit,
         )
     except ModelLoadError as exc:
         state.live_model_error = str(exc)
@@ -87,8 +86,6 @@ def build_state(settings: Settings) -> AppState:
             idle_timeout=settings.flow_idle_timeout_seconds,
             active_timeout=settings.flow_active_timeout_seconds,
             max_active_flows=settings.max_active_flows,
-            detect_idle_timeout=settings.live_flow_idle_timeout_seconds,
-            detect_active_timeout=settings.live_flow_active_timeout_seconds,
         ),
         feature_order=list(
             state.bundle.schema.feature_order if state.bundle else compatibility.RULES

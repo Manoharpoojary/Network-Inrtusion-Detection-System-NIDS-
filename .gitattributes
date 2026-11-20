@@ -4,3 +4,4 @@
 *.png binary
 src/major_project/training/** -text
 src/major_project/result/** -text
+src/major_project/livedetection/binary_test.csv -text

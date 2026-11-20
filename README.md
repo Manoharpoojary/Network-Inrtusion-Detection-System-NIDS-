@@ -74,7 +74,7 @@ matching the verified confusion matrix (TN 973, FP 27, FN 102, TP 898).
 ## 4. Test and lint
 
 ```powershell
-uv run pytest -q                                   # backend: 236 tests
+uv run pytest -q                                   # backend: 240 tests
 uv run ruff check src tests scripts
 uv run ruff format --check src tests scripts
 
@@ -157,31 +157,35 @@ It is for trying the API only and is not real traffic.
 ## 6. Live detection
 
 Open **Live detection** in the dashboard, pick an interface, tick the authorisation box and click
-**Start live detection**. Packets are captured with Scapy/Npcap and grouped into flows. Each flow is
-scored about 5 seconds after it goes quiet, and results appear in the table and in **Detection
-history**. PCAP uploads on the Network page are also scored by this model.
+**Start live detection**. Packets are captured with Scapy/Npcap and grouped into flows exactly the way
+the model's training extractor did it, so each flow is scored within about a second. Results appear
+in the table and in **Detection history**. PCAP uploads on the Network page are also scored by this
+model.
 
 | | |
 |---|---|
 | Model | `src/major_project/livedetection/random_forest_live_adapted.joblib`: RandomForest (200 trees), classes Anomaly / Normal, SHA-256 pinned, restricted loading |
 | Features | Protocol, Src_Port, Dst_Port, Flow_Duration, Tot_Fwd/Bwd_Pkts, TotLen_Fwd/Bwd_Pkts, Pkt_Len_Min/Max/Mean/Std, Flow_IAT_Mean/Std, SYN/ACK/RST/FIN/PSH flags (see `livedetection/description.txt`) |
-| Compatibility | Pickled with scikit-learn 1.9.1; predictions verified identical under the project's 1.6.1 on 5,000 inputs |
+| Source | [network-intrusion-detection-using-ml](https://github.com/prasadmogaveera/network-intrusion-detection-using-ml): `train_live_adapted_model.py` trained it on IoTID20 flows plus 191 live browsing flows (weighted 1000×, labelled Normal) from `flow_aggregator_v5.py` |
+| Flow building | Port of `flow_aggregator_v5.py`: IPv4 TCP/UDP only; 0.1 s flow window and idle timeout; ends early on RST or FIN in both directions; packet length = `len(ip)`; population std; microseconds |
+| Compatibility | Pickled with scikit-learn 1.9.1; predictions identical under the project's 1.6.1 (5,000 inputs). Reproduces the reported 0.998777 accuracy on `binary_test.csv` |
 | Stored | Label, P(anomaly), protocol, ports, counts, the 19 features. No IP addresses or payloads |
 
-**Known limitation:**
+**Verified result:**
 
-- In a 20-second test on ordinary laptop browsing, **96 of 115 flows were labelled Anomaly**.
-  None of the three possible time units (µs/ms/s) made normal browsing look normal.
-- **Likely causes:**
-  - The model was trained on a different network (IoTID20-style data).
-  - The friend's exact feature-extraction code was not available, so features follow
-    `description.txt` and the units implied by the model's thresholds:
-    - payload bytes;
-    - 0/1 flag indicators;
-    - durations in microseconds, configurable via `NIDS_LIVE_TIME_UNIT`.
-  - Windows TCP offload can produce captured segments larger than the 1,460-byte maximum seen in
-    training.
-- **Treat live results as experimental.**
+- **Ordinary browsing:** in a 20-second capture of normal browsing on Wi-Fi, **59 of 66 flows were
+  Normal**, including all HTTPS and DNS. The 7 Anomaly flows were all UDP port 2200.
+- **Before the extractor fix:** using generic flow settings (5 s idle timeout, payload lengths),
+  96 of 115 flows were labelled Anomaly, because flows were up to 200× longer than anything in
+  training.
+
+**Limitations:**
+
+- **What "Normal" means:** the model's Normal class was partly adapted on one person's browsing
+  traffic.
+- **Labels are untested on real attacks:** an Anomaly label is a model estimate, and detection of
+  real attacks on this network has not been evaluated.
+- **Oversized packets:** Windows packet offload can report IP packets larger than the MTU.
 
 ## 7. Configuration
 
@@ -196,7 +200,6 @@ All settings are optional environment variables (or a `.env` file). See [.env.ex
 | `NIDS_MAX_UPLOAD_BYTES` / `NIDS_MAX_CSV_ROWS` / `NIDS_MAX_BATCH_RECORDS` | 10 MB / 50,000 / 1,000 | Input limits |
 | `NIDS_MAX_PCAP_BYTES` / `NIDS_MAX_PCAP_PACKETS` | 50 MB / 1,000,000 | PCAP limits |
 | `NIDS_CAPTURE_TOKEN` | unset | If set, live start/stop need header `X-Capture-Token` |
-| `NIDS_LIVE_TIME_UNIT` | `microseconds` | Unit of Flow_Duration / Flow_IAT_* for the live model |
 | `NIDS_LIVE_ANOMALY_THRESHOLD` | `0.5` | Live flow labelled Anomaly when P(anomaly) ≥ threshold |
 | `NIDS_LIVE_INFERENCE_ENABLED` | `false` | Has no effect while features are incompatible (the gate also requires compatibility) |
 
@@ -233,7 +236,7 @@ tests/          pytest suite                              docs/      plan, archi
 
 - **The original dataset model cannot score live or PCAP traffic.** 25 of its 35 inputs cannot be
   produced from real packets. Live traffic is scored by the separate live-adapted model instead
-  (section 6), whose results on ordinary traffic are experimental.
+  (section 6).
 - **The evaluation is offline only**, on a held-out split of a single synthetic-looking capture. It
   is not an independent test set.
 - **XGBoost, ANN and LSTM figures are as reported by the notebook.** Those models were not saved, so

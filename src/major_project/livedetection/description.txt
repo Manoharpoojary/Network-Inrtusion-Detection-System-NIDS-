@@ -116,4 +116,4 @@ The main interface is the Streamlit application in `app.py`. The project require
 
 
 
-dataset link-https://www.kaggle.com/datasets/techtitan54/csv-for-iotid20
+https://github.com/prasadmogaveera/network-intrusion-detection-using-ml

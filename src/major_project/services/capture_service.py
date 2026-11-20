@@ -10,8 +10,9 @@ Pipeline (one session at a time):
 * When the queue is full the packet is counted in ``dropped_queue_full``, never silently lost.
 * Extracted flows are NEVER sent to the original dataset model (its features cannot be measured
   from packets); the compatibility report's gate is shown for transparency.
-* Detection sessions (``detect=True``) score each finished flow with the separate live-adapted
-  model (``live_detection.LiveDetector``), whose 19 features are measured from packets.
+* Detection sessions (``detect=True``) build flows with ``live_detection.LiveFlowAggregator`` (an
+  exact port of the extractor the live-adapted model was trained with: 0.1 s flow windows) and
+  score each finished flow with that model.
 * Sessions end on user stop, maximum duration, sniffer error, or application shutdown.
 """
 
@@ -39,6 +40,7 @@ from major_project.services.flow_features import (
     ensure_scapy_layers,
     packet_meta,
 )
+from major_project.services.live_detection import LiveFlowAggregator
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +109,7 @@ class CaptureCounters:
     normal: int = 0
     scoring_errors: int = 0
     persist_errors: int = 0
+    skipped_non_tcp_udp: int = 0
 
 
 @dataclass
@@ -134,9 +137,6 @@ class CaptureLimits:
     max_active_flows: int = 50_000
     startup_grace_seconds: float = 0.5
     join_timeout_seconds: float = 10.0
-    # Shorter flow timeouts for detection sessions so results appear within seconds.
-    detect_idle_timeout: float = 5.0
-    detect_active_timeout: float = 60.0
     recent_detections: int = 200
 
 
@@ -211,12 +211,15 @@ class LiveCaptureManager:
             )
             self._session = session
             self._queue = queue.Queue(maxsize=self.limits.queue_size)
-            idle, active = (
-                (self.limits.detect_idle_timeout, self.limits.detect_active_timeout)
+            self._aggregator = (
+                LiveFlowAggregator(max_active=self.limits.max_active_flows)
                 if detect
-                else (self.limits.idle_timeout, self.limits.active_timeout)
+                else FlowAggregator(
+                    self.limits.idle_timeout,
+                    self.limits.active_timeout,
+                    self.limits.max_active_flows,
+                )
             )
-            self._aggregator = FlowAggregator(idle, active, self.limits.max_active_flows)
             self._recent.clear()
             self._detections.clear()
             self._last_report = None
@@ -365,7 +368,7 @@ class LiveCaptureManager:
             "enabled": bool(s and s.detect),
             "model_version": self.detector.live.version if self.detector else None,
             "threshold": self.detector.threshold if self.detector else None,
-            "time_unit": self.detector.time_unit if self.detector else None,
+            "time_unit": "microseconds" if self.detector else None,
         }
         if s is not None and s.detect:
             info["recent"] = list(reversed(self._detections))
@@ -407,11 +410,12 @@ class LiveCaptureManager:
             return
         s = self._session
         s.counters.flows_emitted += len(flows)
-        self._recent.extend(flows)
-        if s.detect and self.detector is not None:
+        if s.detect:  # LiveFlow objects from the live aggregator
             self._score(s, flows)
+        else:
+            self._recent.extend(flows)
 
-    def _score(self, s: CaptureSession, flows: list[ExtractedFlow]) -> None:
+    def _score(self, s: CaptureSession, flows: list) -> None:
         c = s.counters
         try:
             detections = self.detector.score(flows)
@@ -479,6 +483,7 @@ class LiveCaptureManager:
                 break
         self._emit(self._aggregator.flush("capture_stopped"))
         s.counters.flows_evicted_for_capacity = self._aggregator.evicted_for_capacity
+        s.counters.skipped_non_tcp_udp = getattr(self._aggregator, "skipped_packets", 0)
         report = self._report(list(self._recent)) if self._recent else None
         with self._lock:
             self._last_report = report

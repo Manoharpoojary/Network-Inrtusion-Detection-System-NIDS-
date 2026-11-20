@@ -11,8 +11,6 @@ Flow definition (documented because the training data does not specify one):
 * a flow ends after ``idle_timeout`` seconds without packets, after ``active_timeout`` seconds in
   total, when the flow table is full (oldest flow evicted), or at end of input.
 * byte counts use the packet's on-the-wire length (``wirelen``, else captured length).
-* payload length = transport payload size computed from header length fields (TCP/UDP/ICMP); the
-  payload bytes themselves are never read. Used by the live-detection model's features.
 """
 
 from __future__ import annotations
@@ -40,7 +38,7 @@ class PacketMeta:
     ip_proto: int
     length: int
     tcp_flags: str = ""
-    payload_len: int = 0  # transport payload bytes (from header length fields)
+    ip_len: int = 0  # bytes from the IP header onward (len(ip)); used by live detection
 
 
 def ensure_scapy_layers() -> None:
@@ -73,21 +71,16 @@ def packet_meta(pkt: Any) -> PacketMeta | None:
 
         sport = dport = 0
         flags = ""
-        ip_payload = _ip_payload_len(ip)
         if TCP in pkt:
             tcp = pkt[TCP]
             sport, dport, flags = int(tcp.sport), int(tcp.dport), str(tcp.flags)
-            payload = ip_payload - int(tcp.dataofs or 5) * 4
         elif UDP in pkt:
             udp = pkt[UDP]
             sport, dport = int(udp.sport), int(udp.dport)
-            payload = (int(udp.len) - 8) if udp.len else ip_payload - 8
         elif proto in (6, 17):
             raise MalformedPacketError("transport header missing or truncated")
         elif ICMP not in pkt and proto == 1:
             raise MalformedPacketError("ICMP header missing")
-        else:
-            payload = ip_payload - 8 if proto in (1, 58) else ip_payload
 
         wire = getattr(pkt, "wirelen", None)
         length = int(wire) if wire else len(pkt)
@@ -98,16 +91,7 @@ def packet_meta(pkt: Any) -> PacketMeta | None:
         raise
     except Exception as exc:  # scapy dissection errors on corrupt data
         raise MalformedPacketError(f"{type(exc).__name__}") from exc
-    return PacketMeta(ts, src, dst, sport, dport, proto, length, flags, max(payload, 0))
-
-
-def _ip_payload_len(ip: Any) -> int:
-    """Bytes after the IP header, from the IPv4 total length / IPv6 payload length fields."""
-    if hasattr(ip, "ihl"):  # IPv4
-        total = int(ip.len) if ip.len else len(ip)
-        return total - int(ip.ihl or 5) * 4
-    plen = int(ip.plen) if ip.plen else len(ip) - 40
-    return plen
+    return PacketMeta(ts, src, dst, sport, dport, proto, length, flags, len(ip))
 
 
 @dataclass
@@ -130,16 +114,6 @@ class ExtractedFlow:
     sum_sq: float
     tcp_flags: str
     end_reason: str
-    # Payload-size and inter-arrival statistics (live-detection model features).
-    fwd_payload: int = 0
-    bwd_payload: int = 0
-    payload_min: int = 0
-    payload_max: int = 0
-    payload_sum: float = 0.0
-    payload_sum_sq: float = 0.0
-    iat_count: int = 0
-    iat_sum: float = 0.0
-    iat_sum_sq: float = 0.0
 
     @property
     def dur(self) -> float:
@@ -195,33 +169,9 @@ class _FlowState:
     max_len: int = 0
     sum_sq: float = 0.0
     flags: set[str] = field(default_factory=set)
-    fwd_payload: int = 0
-    bwd_payload: int = 0
-    payload_min: int = 1 << 30
-    payload_max: int = 0
-    payload_sum: float = 0.0
-    payload_sum_sq: float = 0.0
-    prev_ts: float | None = None
-    iat_count: int = 0
-    iat_sum: float = 0.0
-    iat_sum_sq: float = 0.0
 
     def add(self, m: PacketMeta) -> None:
         forward = (m.src, m.sport) == self.initiator
-        if self.prev_ts is not None:
-            iat = max(m.ts - self.prev_ts, 0.0)
-            self.iat_count += 1
-            self.iat_sum += iat
-            self.iat_sum_sq += iat * iat
-        self.prev_ts = m.ts
-        if forward:
-            self.fwd_payload += m.payload_len
-        else:
-            self.bwd_payload += m.payload_len
-        self.payload_min = min(self.payload_min, m.payload_len)
-        self.payload_max = max(self.payload_max, m.payload_len)
-        self.payload_sum += m.payload_len
-        self.payload_sum_sq += float(m.payload_len) ** 2
         self.last = max(self.last, m.ts)
         self.pkts += 1
         self.bytes += m.length
@@ -242,10 +192,7 @@ class _FlowState:
             last_seen=self.last, pkts=self.pkts, bytes=self.bytes, spkts=self.spkts,
             dpkts=self.dpkts, sbytes=self.sbytes, dbytes=self.dbytes, min_len=self.min_len,
             max_len=self.max_len, sum_sq=self.sum_sq, tcp_flags="".join(sorted(self.flags)),
-            end_reason=reason, fwd_payload=self.fwd_payload, bwd_payload=self.bwd_payload,
-            payload_min=self.payload_min if self.pkts else 0, payload_max=self.payload_max,
-            payload_sum=self.payload_sum, payload_sum_sq=self.payload_sum_sq,
-            iat_count=self.iat_count, iat_sum=self.iat_sum, iat_sum_sq=self.iat_sum_sq,
+            end_reason=reason,
         )  # fmt: skip
 
 

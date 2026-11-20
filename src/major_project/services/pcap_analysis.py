@@ -175,3 +175,35 @@ def _read_all(iterator, stats, meta_fn, aggregator, keep, max_packets, reader) -
         close = getattr(reader, "close", None)
         if close is not None:
             close()
+
+
+def live_flows_from_capture(
+    data: bytes,
+    max_packets: int,
+    reader_factory: Callable[[bytes], Iterable] = scapy_reader,
+    meta_fn: Callable[[object], PacketMeta | None] = packet_meta,
+) -> list:
+    """Build live-detection flows (0.1 s windows) from a capture, for the live-adapted model."""
+    from major_project.services.live_detection import LiveFlowAggregator
+
+    check_magic(data)
+    aggregator = LiveFlowAggregator()
+    flows: list = []
+    reader = reader_factory(data)
+    try:
+        for count, pkt in enumerate(reader):
+            if count >= max_packets:
+                break
+            try:
+                meta = meta_fn(pkt)
+            except MalformedPacketError:
+                continue
+            if meta is not None:
+                flows.extend(aggregator.add(meta))
+    except Exception:  # truncated or corrupt record: keep what was read (as analyze_capture)
+        pass
+    finally:
+        close = getattr(reader, "close", None)
+        if close is not None:
+            close()
+    return flows + aggregator.flush()

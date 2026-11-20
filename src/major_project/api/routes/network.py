@@ -29,6 +29,7 @@ from major_project.services.pcap_analysis import (
     CaptureLibraryUnavailableError,
     PcapRejectedError,
     analyze_capture,
+    live_flows_from_capture,
 )
 
 router = APIRouter(prefix="/api/network", tags=["network"])
@@ -189,15 +190,7 @@ def _score_pcap(state: AppState, data: bytes, run_id: str) -> dict:
     """Score the capture's flows with the live model, using the live-detection flow timeouts."""
     if state.detector is None:
         return {"available": False, "reason": state.live_model_error or "Live model not loaded."}
-    s = state.settings
-    flows, _ = analyze_capture(
-        data,
-        max_packets=s.max_pcap_packets,
-        max_flows_analyzed=s.max_flows_analyzed,
-        idle_timeout=s.live_flow_idle_timeout_seconds,
-        active_timeout=s.live_flow_active_timeout_seconds,
-        max_active_flows=s.max_active_flows,
-    )
+    flows = live_flows_from_capture(data, state.settings.max_pcap_packets)
     detections = state.detector.score(flows)
     persist_detections(state.db, run_id, "pcap", detections, state.detector.live.version)
     anomalies = sum(d.label == "Anomaly" for d in detections)
@@ -205,7 +198,7 @@ def _score_pcap(state: AppState, data: bytes, run_id: str) -> dict:
         "available": True,
         "model_version": state.detector.live.version,
         "threshold": state.detector.threshold,
-        "time_unit": state.detector.time_unit,
+        "time_unit": "microseconds",
         "flows_scored": len(detections),
         "anomalies": anomalies,
         "normal": len(detections) - anomalies,
