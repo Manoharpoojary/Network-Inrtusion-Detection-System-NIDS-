@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -13,6 +14,10 @@ PROJECT_ROOT = PACKAGE_DIR.parent.parent
 DEFAULT_MODEL_PATH = PACKAGE_DIR / "model" / "iot_intrusion_rf_pipeline (1).joblib"
 DEFAULT_MODEL_SHA256 = "2557ad7b7b25f76f877f9048889d0de8b062672ea7743e380bcf3e5190173cde"
 EVALUATION_DIR = PACKAGE_DIR / "evaluation"
+# Live-adapted Random Forest (19 packet-derived features), provided separately; see
+# livedetection/description.txt.
+DEFAULT_LIVE_MODEL_PATH = PACKAGE_DIR / "livedetection" / "random_forest_live_adapted.joblib"
+DEFAULT_LIVE_MODEL_SHA256 = "816b2de44ac816c09b771245e2b33c37eb9ee6d5b8cf8f4b9e25b1b4a4444f34"
 DEFAULT_DATABASE_URL = f"sqlite:///{(PROJECT_ROOT / 'data' / 'nids.db').as_posix()}"
 
 
@@ -64,6 +69,15 @@ class Settings(BaseSettings):
     # Optional shared secret for capture start/stop (header X-Capture-Token). Keep it in .env,
     # never in source control.
     capture_token: str | None = None
+
+    # Live detection (live-adapted model).
+    live_model_path: Path = DEFAULT_LIVE_MODEL_PATH
+    live_model_sha256: str = DEFAULT_LIVE_MODEL_SHA256
+    live_anomaly_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    # Unit for Flow_Duration / Flow_IAT_*: microseconds (CICFlowMeter / IoTID20 convention).
+    live_time_unit: Literal["microseconds", "milliseconds", "seconds"] = "microseconds"
+    live_flow_idle_timeout_seconds: float = Field(default=5.0, gt=0)
+    live_flow_active_timeout_seconds: float = Field(default=60.0, gt=0)
 
     database_url: str = DEFAULT_DATABASE_URL
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]

@@ -1,0 +1,119 @@
+I’ll review the project’s main documentation and structure, then provide a concise integration-ready description.
+
+Read , line 1 to the end
+Completed with input: {
+  "path": "C:\\Users\\Prasad\\OneDrive\\Desktop\\Final Project\\analyze_feature_groups.py",
+  "view_range": [
+    1,
+    -1
+  ]
+}
+
+Find files matching `*`
+
+Search for `(?i)(next word|prediction|readme|lstm|gru|transformer|feature)`
+
+Find files matching `README*`
+
+Find files matching `*.py`
+
+Find files matching `*.csv`
+
+Find files matching `requirements*.txt`
+
+Find files matching `*.ipynb`
+
+Read , lines 1 to 220
+Completed with input: {
+  "path": "C:\\Users\\Prasad\\OneDrive\\Desktop\\Final Project\\app.py",
+  "view_range": [
+    1,
+    220
+  ]
+}
+
+Read , line 1 to the end
+Completed with input: {
+  "path": "C:\\Users\\Prasad\\OneDrive\\Desktop\\Final Project\\requirements.txt",
+  "view_range": [
+    1,
+    -1
+  ]
+}
+
+"Read" failed
+Completed with input: {
+  "path": "C:\\Users\\Prasad\\OneDrive\\Desktop\\Final Project\\train_models.py",
+  "view_range": [
+    1,
+    220
+  ]
+}
+Tool execution failed: Path does not exist
+
+Read , lines 1 to 220
+Completed with input: {
+  "path": "C:\\Users\\Prasad\\OneDrive\\Desktop\\Final Project\\live_intrusion_detector.py",
+  "view_range": [
+    1,
+    220
+  ]
+}
+
+Ran terminal command: Get-ChildItem -LiteralPath 'C:\Users\Prasad\OneDrive\Desktop\Final Project' -File | Select-Object -ExpandProperty Name
+
+## Project Description
+
+This project is an **IoT Network Intrusion Detection System** that uses machine-learning models to identify whether network traffic is **normal or anomalous**. It captures live network packets, aggregates them into communication flows, extracts 19 traffic features, and applies trained models such as Random Forest, XGBoost, ANN, and LSTM for intrusion classification.
+
+The system includes:
+
+- **Data preprocessing:** Cleans and prepares IoT network intrusion datasets.
+- **Feature engineering:** Extracts protocol, port, packet count, packet length, flow duration, inter-arrival time, and TCP flag features.
+- **Model training and comparison:** Evaluates multiple machine-learning and deep-learning models.
+- **Live detection:** Captures real-time network traffic using Scapy and generates anomaly predictions.
+- **Web dashboard:** Uses Streamlit to display captured flows, predictions, anomaly probabilities, and traffic summaries.
+- **Feature validation:** The `analyze_feature_groups.py` script checks duplicate feature vectors and detects whether identical traffic patterns are associated with multiple classes.
+- **Output files:** Stores live features and predictions in CSV files for analysis and visualization.
+
+### Integration Summary
+
+When combining this project with another application, it can be integrated as a **network-security module**. The other project can send traffic-flow data to the prediction component and receive:
+
+```text
+Prediction: Normal or Anomaly
+P_Anomaly: Probability of anomalous traffic
+P_Normal: Probability of normal traffic
+```
+
+The main interface is the Streamlit application in `app.py`. The project requires Python packages listed in `requirements.txt`, including Pandas, Scikit-learn, TensorFlow-related model support, Scapy, Joblib, and Streamlit.
+
+**Important:** Although the repository name suggests next-word prediction, the current implementation is focused on **IoT network intrusion detection**, not natural-language prediction.
+
+
+
+
+1. Protocol – The network protocol used (TCP, UDP, etc.).
+2. Src_Port – Source port of the network traffic.
+3. Dst_Port – Destination port of the network traffic.
+4. Flow_Duration – Duration of the network flow.
+5. Tot_Fwd_Pkts – Total packets sent in the forward direction.
+6. Tot_Bwd_Pkts – Total packets sent in the backward direction.
+7. TotLen_Fwd_Pkts – Total bytes in forward-direction packets.
+8. TotLen_Bwd_Pkts – Total bytes in backward-direction packets.
+9. Pkt_Len_Min – Minimum packet length.
+10. Pkt_Len_Max – Maximum packet length.
+11. Pkt_Len_Mean – Average packet length.
+12. Pkt_Len_Std – Standard deviation of packet lengths.
+13. Flow_IAT_Mean – Average time between packets in a flow.
+14. Flow_IAT_Std – Variation in time between packets in a flow.
+15. SYN_Flag_Cnt – SYN flag indicator.
+16. ACK_Flag_Cnt – ACK flag indicator.
+17. RST_Flag_Cnt – RST flag indicator.
+18. FIN_Flag_Cnt – FIN flag indicator.
+19. PSH_Flag_Cnt – PSH flag indicator.
+
+
+
+
+dataset link-https://www.kaggle.com/datasets/techtitan54/csv-for-iotid20

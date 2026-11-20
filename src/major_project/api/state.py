@@ -6,15 +6,17 @@ import json
 import logging
 import time
 from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 
 from major_project.core.config import Settings
-from major_project.database.models import NetworkRun
+from major_project.database.models import LiveDetection, NetworkRun
 from major_project.database.session import Database
 from major_project.schemas.flow import schema_mismatches
 from major_project.services import compatibility
 from major_project.services.capture_service import CaptureLimits, LiveCaptureManager
 from major_project.services.explain import ExplanationService
 from major_project.services.inference import InferenceService
+from major_project.services.live_detection import Detection, LiveDetector, load_live_model
 from major_project.services.model_loader import ModelBundle, ModelLoadError, load_model
 from major_project.services.recording import PredictionRecorder
 from major_project.services.severity import SeverityPolicy
@@ -34,6 +36,8 @@ class AppState:
     recorder: PredictionRecorder | None = None
     model_error: str | None = None
     capture: LiveCaptureManager | None = None
+    detector: LiveDetector | None = None
+    live_model_error: str | None = None
 
     @property
     def model_ready(self) -> bool:
@@ -65,6 +69,16 @@ def build_state(settings: Settings) -> AppState:
         state.model_error = str(exc)
         logger.error("model unavailable", extra={"error_code": type(exc).__name__})
 
+    try:
+        state.detector = LiveDetector(
+            load_live_model(settings.live_model_path, settings.live_model_sha256),
+            settings.live_anomaly_threshold,
+            settings.live_time_unit,
+        )
+    except ModelLoadError as exc:
+        state.live_model_error = str(exc)
+        logger.error("live model unavailable", extra={"error_code": type(exc).__name__})
+
     state.capture = LiveCaptureManager(
         CaptureLimits(
             queue_size=settings.capture_queue_size,
@@ -73,6 +87,8 @@ def build_state(settings: Settings) -> AppState:
             idle_timeout=settings.flow_idle_timeout_seconds,
             active_timeout=settings.flow_active_timeout_seconds,
             max_active_flows=settings.max_active_flows,
+            detect_idle_timeout=settings.live_flow_idle_timeout_seconds,
+            detect_active_timeout=settings.live_flow_active_timeout_seconds,
         ),
         feature_order=list(
             state.bundle.schema.feature_order if state.bundle else compatibility.RULES
@@ -81,8 +97,34 @@ def build_state(settings: Settings) -> AppState:
         validator=state.inference,
         live_inference_enabled=settings.live_inference_enabled,
         on_finish=lambda session, report: persist_live_session(db, session, report),
+        detector=state.detector,
+        on_detections=lambda session, found: persist_detections(
+            db, session.id, "live", found, state.detector.live.version
+        ),
     )
     return state
+
+
+def persist_detections(
+    db: Database, run_id: str, source: str, detections: list[Detection], model_version: str
+) -> None:
+    if not detections:
+        return
+    now = datetime.now(UTC)
+    with db.session() as s:
+        s.add_all(
+            [
+                LiveDetection(
+                    run_id=run_id, source=source, detected_at=now, label=d.label,
+                    anomaly_probability=d.anomaly_probability, model_version=model_version,
+                    protocol=d.protocol, sport=d.sport, dport=d.dport, duration_s=d.duration_s,
+                    fwd_pkts=d.fwd_pkts, bwd_pkts=d.bwd_pkts, fwd_bytes=d.fwd_bytes,
+                    bwd_bytes=d.bwd_bytes, features_json=json.dumps(d.features),
+                )
+                for d in detections
+            ]
+        )  # fmt: skip
+        s.commit()
 
 
 def persist_live_session(db: Database, session, report: dict) -> None:
@@ -112,6 +154,7 @@ def persist_live_session(db: Database, session, report: dict) -> None:
                         "stop_reason": session.stop_reason,
                         "error": session.error,
                         "max_duration_seconds": session.max_duration_seconds,
+                        "detect": session.detect,
                     }
                 ),
                 report_json=json.dumps(report, default=str),

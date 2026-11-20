@@ -7,7 +7,9 @@ closed unless the features are compatible AND live inference is explicitly enabl
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import UTC, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
@@ -17,8 +19,8 @@ from sqlalchemy.orm import Session
 from major_project.api.deps import get_session, get_state
 from major_project.api.errors import ApiError
 from major_project.api.security import require_capture_control, require_local_client
-from major_project.api.state import AppState
-from major_project.database.models import NetworkRun
+from major_project.api.state import AppState, persist_detections
+from major_project.database.models import LiveDetection, NetworkRun
 from major_project.schemas.api import ErrorResponse
 from major_project.services import capture_diagnostics, compatibility, interfaces
 from major_project.services.capture_service import CaptureError
@@ -45,6 +47,9 @@ class LiveStartRequest(BaseModel):
     max_duration_seconds: int | None = Field(None, ge=1, le=3600)
     authorized: bool = Field(
         description="Must be true: you confirm you are authorised to monitor this interface."
+    )
+    detect: bool = Field(
+        False, description="Score each finished flow with the live-adapted detection model"
     )
 
 
@@ -136,9 +141,6 @@ def analyze_pcap(
         raise ApiError(exc.status_code, exc.code, exc.message) from exc
     except CaptureLibraryUnavailableError as exc:
         raise ApiError(503, "capture_unavailable", str(exc)) from exc
-    finally:
-        del data
-
     order = state.bundle.schema.feature_order if state.bundle else list(compatibility.RULES)
     report = compatibility.build_report(
         flows,
@@ -152,14 +154,16 @@ def analyze_pcap(
         for f in flows[:FLOW_SAMPLE]
     ]
     report["predictions"] = None
-    report["predictions_note"] = (
-        "Not scored: " + " ".join(report["inference_gate"]["reasons"])
-        if not report["inference_gate"]["allowed"]
-        else "Scoring of extracted flows is not implemented."
+    report["predictions_note"] = "Not scored by the original dataset model: " + " ".join(
+        report["inference_gate"]["reasons"]
     )
+
+    run_id = str(uuid.uuid4())
+    report["live_detection"] = _score_pcap(state, data, run_id)
 
     now = datetime.now(UTC)
     run = NetworkRun(
+        id=run_id,
         kind="pcap",
         filename=safe_filename(file.filename),
         status="completed"
@@ -179,6 +183,34 @@ def analyze_pcap(
     session.add(run)
     session.commit()
     return _run_out(run, include_report=True)
+
+
+def _score_pcap(state: AppState, data: bytes, run_id: str) -> dict:
+    """Score the capture's flows with the live model, using the live-detection flow timeouts."""
+    if state.detector is None:
+        return {"available": False, "reason": state.live_model_error or "Live model not loaded."}
+    s = state.settings
+    flows, _ = analyze_capture(
+        data,
+        max_packets=s.max_pcap_packets,
+        max_flows_analyzed=s.max_flows_analyzed,
+        idle_timeout=s.live_flow_idle_timeout_seconds,
+        active_timeout=s.live_flow_active_timeout_seconds,
+        max_active_flows=s.max_active_flows,
+    )
+    detections = state.detector.score(flows)
+    persist_detections(state.db, run_id, "pcap", detections, state.detector.live.version)
+    anomalies = sum(d.label == "Anomaly" for d in detections)
+    return {
+        "available": True,
+        "model_version": state.detector.live.version,
+        "threshold": state.detector.threshold,
+        "time_unit": state.detector.time_unit,
+        "flows_scored": len(detections),
+        "anomalies": anomalies,
+        "normal": len(detections) - anomalies,
+        "detections": [d.as_dict() for d in detections[:FLOW_SAMPLE]],
+    }
 
 
 @router.get("/runs")
@@ -235,7 +267,11 @@ def live_start(body: LiveStartRequest, state: AppState = Depends(require_capture
             "Confirm you are authorised to monitor this interface (authorized: true).",
         )
     return _capture_call(
-        state.capture.start, body.interface, body.bpf_filter, body.max_duration_seconds
+        state.capture.start,
+        body.interface,
+        body.bpf_filter,
+        body.max_duration_seconds,
+        body.detect,
     )
 
 
@@ -248,3 +284,72 @@ def live_stop(state: AppState = Depends(require_capture_control)) -> dict:
 def live_reset(state: AppState = Depends(require_capture_control)) -> dict:
     """Clear the finished session from the live panel. Saved runs in history are kept."""
     return _capture_call(state.capture.reset)
+
+
+# ----------------------------------------------------------------------------- live detection
+
+
+@router.get("/live/model")
+def live_model_info(state: AppState = Depends(get_state)) -> dict:
+    """The live-adapted detection model: features, classes, threshold and time unit."""
+    if state.detector is None:
+        return {"available": False, "error": state.live_model_error}
+    return state.detector.info()
+
+
+def _detection_out(d: LiveDetection) -> dict:
+    return {
+        "id": d.id,
+        "run_id": d.run_id,
+        "source": d.source,
+        "detected_at": d.detected_at,
+        "label": d.label,
+        "anomaly_probability": d.anomaly_probability,
+        "model_version": d.model_version,
+        "protocol": d.protocol,
+        "sport": d.sport,
+        "dport": d.dport,
+        "duration_s": d.duration_s,
+        "fwd_pkts": d.fwd_pkts,
+        "bwd_pkts": d.bwd_pkts,
+        "fwd_bytes": d.fwd_bytes,
+        "bwd_bytes": d.bwd_bytes,
+        "features": json.loads(d.features_json),
+    }
+
+
+@router.get("/live/detections")
+def list_detections(
+    label: Literal["Anomaly", "Normal"] | None = None,
+    source: Literal["live", "pcap"] | None = None,
+    run_id: str | None = Query(None, max_length=36),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Stored live-model detections, newest first (ports and counts only; no addresses)."""
+    stmt = select(LiveDetection)
+    if label:
+        stmt = stmt.where(LiveDetection.label == label)
+    if source:
+        stmt = stmt.where(LiveDetection.source == source)
+    if run_id:
+        stmt = stmt.where(LiveDetection.run_id == run_id)
+    total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    rows = session.scalars(
+        stmt.order_by(LiveDetection.detected_at.desc(), LiveDetection.id.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    counts = dict(
+        session.execute(
+            select(LiveDetection.label, func.count(LiveDetection.id)).group_by(LiveDetection.label)
+        ).all()
+    )
+    return {
+        "items": [_detection_out(d) for d in rows],
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "totals": {"anomaly": counts.get("Anomaly", 0), "normal": counts.get("Normal", 0)},
+    }

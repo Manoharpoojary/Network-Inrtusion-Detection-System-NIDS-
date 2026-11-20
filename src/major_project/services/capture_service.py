@@ -8,8 +8,10 @@ Pipeline (one session at a time):
 * Only header fields are parsed (``flow_features.packet_meta``); packets themselves are not kept,
   so payloads never enter the queue.
 * When the queue is full the packet is counted in ``dropped_queue_full``, never silently lost.
-* Extracted flows are NEVER sent to the model. The compatibility report's inference gate is shown
-  for transparency; this module has no code path that calls the predictor.
+* Extracted flows are NEVER sent to the original dataset model (its features cannot be measured
+  from packets); the compatibility report's gate is shown for transparency.
+* Detection sessions (``detect=True``) score each finished flow with the separate live-adapted
+  model (``live_detection.LiveDetector``), whose 19 features are measured from packets.
 * Sessions end on user stop, maximum duration, sniffer error, or application shutdown.
 """
 
@@ -100,6 +102,11 @@ class CaptureCounters:
     malformed_packets: int = 0
     flows_emitted: int = 0
     flows_evicted_for_capacity: int = 0
+    flows_scored: int = 0
+    anomalies: int = 0
+    normal: int = 0
+    scoring_errors: int = 0
+    persist_errors: int = 0
 
 
 @dataclass
@@ -114,6 +121,7 @@ class CaptureSession:
     stop_reason: str | None = None
     error: dict[str, str] | None = None
     counters: CaptureCounters = field(default_factory=CaptureCounters)
+    detect: bool = False
 
 
 @dataclass
@@ -126,6 +134,10 @@ class CaptureLimits:
     max_active_flows: int = 50_000
     startup_grace_seconds: float = 0.5
     join_timeout_seconds: float = 10.0
+    # Shorter flow timeouts for detection sessions so results appear within seconds.
+    detect_idle_timeout: float = 5.0
+    detect_active_timeout: float = 60.0
+    recent_detections: int = 200
 
 
 class LiveCaptureManager:
@@ -140,6 +152,8 @@ class LiveCaptureManager:
         interface_resolver: InterfaceResolver = scapy_interface_resolver,
         meta_fn: Callable[[Any], PacketMeta | None] = packet_meta,
         on_finish: Callable[[CaptureSession, dict], None] | None = None,
+        detector: Any = None,  # live_detection.LiveDetector, or None if the live model is missing
+        on_detections: Callable[[CaptureSession, list], None] | None = None,
     ):
         self.limits = limits
         self.feature_order = feature_order
@@ -150,6 +164,8 @@ class LiveCaptureManager:
         self.interface_resolver = interface_resolver
         self.meta_fn = meta_fn
         self.on_finish = on_finish
+        self.detector = detector
+        self.on_detections = on_detections
 
         self._lock = threading.RLock()
         self._session: CaptureSession | None = None
@@ -160,6 +176,7 @@ class LiveCaptureManager:
         self._aggregator: FlowAggregator | None = None
         self._recent: deque[ExtractedFlow] = deque(maxlen=limits.recent_flows)
         self._last_report: dict | None = None
+        self._detections: deque[dict] = deque(maxlen=limits.recent_detections)
 
     # ------------------------------------------------------------------ public API
 
@@ -168,11 +185,19 @@ class LiveCaptureManager:
         return self._session.state if self._session else "stopped"
 
     def start(
-        self, interface: str, bpf_filter: str | None = None, max_duration: int | None = None
+        self,
+        interface: str,
+        bpf_filter: str | None = None,
+        max_duration: int | None = None,
+        detect: bool = False,
     ) -> dict:
         with self._lock:
             if self.state in ("starting", "running", "stopping"):
                 raise CaptureError(409, "capture_busy", "A capture session is already active.")
+            if detect and self.detector is None:
+                raise CaptureError(
+                    503, "live_model_unavailable", "The live-detection model is not loaded."
+                )
             duration = min(max_duration or self.limits.max_duration_seconds,
                            self.limits.max_duration_seconds)  # fmt: skip
             iface = self.interface_resolver(interface)
@@ -182,13 +207,18 @@ class LiveCaptureManager:
                 bpf_filter=bpf_filter,
                 max_duration_seconds=duration,
                 started_at=datetime.now(UTC),
+                detect=detect,
             )
             self._session = session
             self._queue = queue.Queue(maxsize=self.limits.queue_size)
-            self._aggregator = FlowAggregator(
-                self.limits.idle_timeout, self.limits.active_timeout, self.limits.max_active_flows
+            idle, active = (
+                (self.limits.detect_idle_timeout, self.limits.detect_active_timeout)
+                if detect
+                else (self.limits.idle_timeout, self.limits.active_timeout)
             )
+            self._aggregator = FlowAggregator(idle, active, self.limits.max_active_flows)
             self._recent.clear()
+            self._detections.clear()
             self._last_report = None
             self._stop_event.clear()
 
@@ -261,6 +291,7 @@ class LiveCaptureManager:
             self._worker = None
             self._aggregator = None
             self._recent.clear()
+            self._detections.clear()
             self._last_report = None
             return self.status()
 
@@ -272,6 +303,7 @@ class LiveCaptureManager:
                 return {
                     "state": "stopped",
                     "session": None,
+                    "detection": self._detection_dict(None),
                     "live_inference": self._gate_dict(compatible=False),
                 }
             end = s.stopped_at or datetime.now(UTC)
@@ -297,7 +329,9 @@ class LiveCaptureManager:
                         "capacity": self.limits.queue_size,
                     },
                     "active_flows": self._aggregator.active_flows if self._aggregator else 0,
+                    "detect": s.detect,
                 },
+                "detection": self._detection_dict(s),
                 "recent_flows": [
                     {"observed": f.as_dict(), "model_features": compatibility.model_candidate(f)}
                     for f in flows
@@ -322,8 +356,20 @@ class LiveCaptureManager:
             "enabled": False,
             "gate_allowed": gate.allowed,
             "reasons": list(gate.reasons),
-            "note": "Extracted flows are not scored by the model.",
+            "note": "Extracted flows are not scored by the original dataset model.",
         }
+
+    def _detection_dict(self, s: CaptureSession | None) -> dict:
+        info = {
+            "model_available": self.detector is not None,
+            "enabled": bool(s and s.detect),
+            "model_version": self.detector.live.version if self.detector else None,
+            "threshold": self.detector.threshold if self.detector else None,
+            "time_unit": self.detector.time_unit if self.detector else None,
+        }
+        if s is not None and s.detect:
+            info["recent"] = list(reversed(self._detections))
+        return info
 
     def _fail(self, code: str, message: str) -> None:
         s = self._session
@@ -357,9 +403,34 @@ class LiveCaptureManager:
             c.dropped_queue_full += 1
 
     def _emit(self, flows: list[ExtractedFlow]) -> None:
-        if flows:
-            self._session.counters.flows_emitted += len(flows)
-            self._recent.extend(flows)
+        if not flows:
+            return
+        s = self._session
+        s.counters.flows_emitted += len(flows)
+        self._recent.extend(flows)
+        if s.detect and self.detector is not None:
+            self._score(s, flows)
+
+    def _score(self, s: CaptureSession, flows: list[ExtractedFlow]) -> None:
+        c = s.counters
+        try:
+            detections = self.detector.score(flows)
+        except Exception as exc:  # never let a scoring failure stop the capture
+            c.scoring_errors += len(flows)
+            logger.error("live scoring failed", exc_info=exc)
+            return
+        now = datetime.now(UTC)
+        c.flows_scored += len(detections)
+        c.anomalies += sum(d.label == "Anomaly" for d in detections)
+        c.normal += sum(d.label != "Anomaly" for d in detections)
+        for d in detections:
+            self._detections.append({**d.as_dict(), "detected_at": now})
+        if self.on_detections is not None:
+            try:
+                self.on_detections(s, detections)
+            except Exception as exc:
+                c.persist_errors += len(detections)
+                logger.error("could not persist detections", exc_info=exc)
 
     def _run(self) -> None:
         s = self._session

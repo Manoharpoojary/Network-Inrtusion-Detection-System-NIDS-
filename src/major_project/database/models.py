@@ -106,6 +106,29 @@ class NetworkRun(Base):
     report_json: Mapped[str] = mapped_column(Text)
 
 
+class LiveDetection(Base):
+    """One flow scored by the live-adapted model. Ports and counts only; no addresses."""
+
+    __tablename__ = "live_detections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(String(36), index=True)  # capture session or PCAP run
+    source: Mapped[str] = mapped_column(String(8), index=True)  # live | pcap
+    detected_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, index=True)
+    label: Mapped[str] = mapped_column(String(8), index=True)  # Anomaly | Normal
+    anomaly_probability: Mapped[float] = mapped_column(Float)
+    model_version: Mapped[str] = mapped_column(String(32))
+    protocol: Mapped[str] = mapped_column(String(8))
+    sport: Mapped[int] = mapped_column(Integer)
+    dport: Mapped[int] = mapped_column(Integer, index=True)
+    duration_s: Mapped[float] = mapped_column(Float)
+    fwd_pkts: Mapped[int] = mapped_column(Integer)
+    bwd_pkts: Mapped[int] = mapped_column(Integer)
+    fwd_bytes: Mapped[int] = mapped_column(Integer)
+    bwd_bytes: Mapped[int] = mapped_column(Integer)
+    features_json: Mapped[str] = mapped_column(Text)
+
+
 class Alert(Base):
     __tablename__ = "alerts"
 
