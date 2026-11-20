@@ -1,4 +1,4 @@
-import { Bell, BrainCircuit, FileSpreadsheet, LayoutDashboard, Network as NetworkIcon, Server, Shield } from 'lucide-react'
+import { Bell, BrainCircuit, FileSpreadsheet, LayoutDashboard, Network as NetworkIcon, Radar, Server, Shield } from 'lucide-react'
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { api } from './api/client'
 import { cx } from './lib/cx'
@@ -11,6 +11,7 @@ const Analyze = lazy(() => import('./pages/Analyze').then((m) => ({ default: m.A
 const Alerts = lazy(() => import('./pages/Alerts').then((m) => ({ default: m.Alerts })))
 const AlertDetailPanel = lazy(() => import('./pages/Alerts').then((m) => ({ default: m.AlertDetailPanel })))
 const ModelPerformance = lazy(() => import('./pages/ModelPerformance').then((m) => ({ default: m.ModelPerformance })))
+const LiveDetection = lazy(() => import('./pages/LiveDetection').then((m) => ({ default: m.LiveDetection })))
 const Network = lazy(() => import('./pages/Network').then((m) => ({ default: m.Network })))
 const SystemInfo = lazy(() => import('./pages/SystemInfo').then((m) => ({ default: m.SystemInfo })))
 
@@ -19,6 +20,7 @@ const PAGES = [
   { id: 'analyze', label: 'Analyze', icon: FileSpreadsheet },
   { id: 'alerts', label: 'Alerts', icon: Bell },
   { id: 'model', label: 'Model performance', icon: BrainCircuit },
+  { id: 'live', label: 'Live detection', icon: Radar },
   { id: 'network', label: 'Network & capture', icon: NetworkIcon },
   { id: 'system', label: 'System', icon: Server },
 ] as const
@@ -96,6 +98,7 @@ export default function App() {
           {page === 'analyze' && <Analyze />}
           {page === 'alerts' && <Alerts onOpenAlert={openAlert} />}
           {page === 'model' && <ModelPerformance />}
+          {page === 'live' && <LiveDetection />}
           {page === 'network' && <Network />}
           {page === 'system' && <SystemInfo />}
           </Suspense>

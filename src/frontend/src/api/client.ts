@@ -4,6 +4,8 @@ import type {
   Analysis,
   CaptureCheckResponse,
   CsvAnalysis,
+  DetectionPage,
+  LiveModelInfo,
   DashboardSummary,
   FeatureMapping,
   GlobalImportance,
@@ -138,9 +140,18 @@ export const api = {
 
   liveStatus: () => request<LiveStatus>('/api/network/live/status'),
   liveStart: (
-    body: { interface: string; bpf_filter?: string; max_duration_seconds?: number; authorized: boolean },
+    body: {
+      interface: string
+      bpf_filter?: string
+      max_duration_seconds?: number
+      authorized: boolean
+      detect?: boolean
+    },
     token?: string,
   ) => postJson<LiveStatus>('/api/network/live/start', body, token ? { 'X-Capture-Token': token } : {}),
+  liveModel: () => request<LiveModelInfo>('/api/network/live/model'),
+  liveDetections: (query: { label?: string; source?: string; offset?: number; limit?: number }) =>
+    request<DetectionPage>('/api/network/live/detections', { query: { ...query } }),
   liveReset: (token?: string) =>
     postJson<LiveStatus>('/api/network/live/reset', undefined, token ? { 'X-Capture-Token': token } : {}),
   liveStop: (token?: string) =>

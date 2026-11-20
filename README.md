@@ -2,9 +2,10 @@
 
 A final-year BTech project. It serves a trained **Random Forest** model behind a FastAPI backend and a
 React dashboard. The model classifies IoT network **flow-feature records** as **Benign** or **Attack**.
-The project also includes offline PCAP analysis and a controlled live-capture module. That module
-extracts flow features from real traffic and **reports why they are not compatible with the model**,
-so predictions on live traffic are disabled.
+The project also includes offline PCAP analysis and **live detection**. Live traffic is scored by a
+second, separately provided **live-adapted Random Forest** (19 packet-derived flow features). The
+original dataset model is never used on live traffic, because its features cannot be measured from
+real packets.
 
 | | |
 |---|---|
@@ -73,14 +74,14 @@ matching the verified confusion matrix (TN 973, FP 27, FN 102, TP 898).
 ## 4. Test and lint
 
 ```powershell
-uv run pytest -q                                   # backend: 220 tests
+uv run pytest -q                                   # backend: 236 tests
 uv run ruff check src tests scripts
 uv run ruff format --check src tests scripts
 
 cd src/frontend
 npm run lint        # oxlint
 npm run typecheck   # tsc -b
-npm test            # 14 unit/component tests (+5 end-to-end tests, skipped unless E2E_BASE_URL is set)
+npm test            # 18 unit/component tests (+5 end-to-end tests, skipped unless E2E_BASE_URL is set)
 npm run build
 ```
 
@@ -144,12 +145,45 @@ curl -X POST http://127.0.0.1:8000/api/network/live/start -H "Content-Type: appl
      -d '{"interface": "Wi-Fi", "authorized": true, "max_duration_seconds": 60}'
 curl -X POST http://127.0.0.1:8000/api/network/live/stop
 curl -X POST http://127.0.0.1:8000/api/network/live/reset   # clear the finished session; saved runs are kept
+# live detection (live-adapted model)
+curl http://127.0.0.1:8000/api/network/live/model
+curl -X POST http://127.0.0.1:8000/api/network/live/start -H "Content-Type: application/json"      -d '{"interface": "Wi-Fi", "authorized": true, "detect": true, "max_duration_seconds": 60}'
+curl "http://127.0.0.1:8000/api/network/live/detections?label=Anomaly&limit=50"
 ```
 
 `tests/fixtures/synthetic_flow_record.json` holds a **synthetic** example record under its `record` key.
 It is for trying the API only and is not real traffic.
 
-## 6. Configuration
+## 6. Live detection
+
+Open **Live detection** in the dashboard, pick an interface, tick the authorisation box and click
+**Start live detection**. Packets are captured with Scapy/Npcap and grouped into flows. Each flow is
+scored about 5 seconds after it goes quiet, and results appear in the table and in **Detection
+history**. PCAP uploads on the Network page are also scored by this model.
+
+| | |
+|---|---|
+| Model | `src/major_project/livedetection/random_forest_live_adapted.joblib`: RandomForest (200 trees), classes Anomaly / Normal, SHA-256 pinned, restricted loading |
+| Features | Protocol, Src_Port, Dst_Port, Flow_Duration, Tot_Fwd/Bwd_Pkts, TotLen_Fwd/Bwd_Pkts, Pkt_Len_Min/Max/Mean/Std, Flow_IAT_Mean/Std, SYN/ACK/RST/FIN/PSH flags (see `livedetection/description.txt`) |
+| Compatibility | Pickled with scikit-learn 1.9.1; predictions verified identical under the project's 1.6.1 on 5,000 inputs |
+| Stored | Label, P(anomaly), protocol, ports, counts, the 19 features. No IP addresses or payloads |
+
+**Known limitation:**
+
+- In a 20-second test on ordinary laptop browsing, **96 of 115 flows were labelled Anomaly**.
+  None of the three possible time units (µs/ms/s) made normal browsing look normal.
+- **Likely causes:**
+  - The model was trained on a different network (IoTID20-style data).
+  - The friend's exact feature-extraction code was not available, so features follow
+    `description.txt` and the units implied by the model's thresholds:
+    - payload bytes;
+    - 0/1 flag indicators;
+    - durations in microseconds, configurable via `NIDS_LIVE_TIME_UNIT`.
+  - Windows TCP offload can produce captured segments larger than the 1,460-byte maximum seen in
+    training.
+- **Treat live results as experimental.**
+
+## 7. Configuration
 
 All settings are optional environment variables (or a `.env` file). See [.env.example](.env.example). Key ones:
 
@@ -162,9 +196,11 @@ All settings are optional environment variables (or a `.env` file). See [.env.ex
 | `NIDS_MAX_UPLOAD_BYTES` / `NIDS_MAX_CSV_ROWS` / `NIDS_MAX_BATCH_RECORDS` | 10 MB / 50,000 / 1,000 | Input limits |
 | `NIDS_MAX_PCAP_BYTES` / `NIDS_MAX_PCAP_PACKETS` | 50 MB / 1,000,000 | PCAP limits |
 | `NIDS_CAPTURE_TOKEN` | unset | If set, live start/stop need header `X-Capture-Token` |
+| `NIDS_LIVE_TIME_UNIT` | `microseconds` | Unit of Flow_Duration / Flow_IAT_* for the live model |
+| `NIDS_LIVE_ANOMALY_THRESHOLD` | `0.5` | Live flow labelled Anomaly when P(anomaly) ≥ threshold |
 | `NIDS_LIVE_INFERENCE_ENABLED` | `false` | Has no effect while features are incompatible (the gate also requires compatibility) |
 
-## 7. Security model (local use)
+## 8. Security model (local use)
 
 - Both servers bind to **127.0.0.1**.
 - **Capture control:** capture-check and live start/stop/status are accepted only from localhost.
@@ -180,7 +216,7 @@ All settings are optional environment variables (or a `.env` file). See [.env.ex
   - Logs record the method, path, status and duration only.
   - Errors never include stack traces.
 
-## 8. Project structure
+## 9. Project structure
 
 ```text
 src/major_project/
@@ -193,11 +229,11 @@ src/frontend/   React dashboard                           scripts/   evaluation 
 tests/          pytest suite                              docs/      plan, architecture, model card, compatibility
 ```
 
-## 9. Known limitations
+## 10. Known limitations
 
-- **Live and PCAP traffic cannot be scored.** 25 of the 35 model inputs cannot be produced from real
-  packets with the training data's meaning. Enabling it would require retraining on features
-  computed from real flows, which needs the project owner's approval.
+- **The original dataset model cannot score live or PCAP traffic.** 25 of its 35 inputs cannot be
+  produced from real packets. Live traffic is scored by the separate live-adapted model instead
+  (section 6), whose results on ordinary traffic are experimental.
 - **The evaluation is offline only**, on a held-out split of a single synthetic-looking capture. It
   is not an independent test set.
 - **XGBoost, ANN and LSTM figures are as reported by the notebook.** Those models were not saved, so
@@ -214,7 +250,7 @@ tests/          pytest suite                              docs/      plan, archi
 - **Browser testing:** the dashboard was verified by component tests and an end-to-end render
   against the running API (jsdom). No manual or automated test was run in a real browser.
 
-## 10. Documentation
+## 11. Documentation
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): components, data flow, threading, database schema.
 - [docs/MODEL_CARD.md](docs/MODEL_CARD.md): model, data, verified metrics, limitations.

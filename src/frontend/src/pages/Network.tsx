@@ -36,7 +36,7 @@ const STATUS_TONE: Record<FeatureStatus, 'green' | 'sky' | 'red' | 'slate'> = {
 }
 
 const NOT_SCORED =
-  'Extracted flows are not scored by the model: their features do not match the training data, so any prediction would be unreliable.'
+  'This page does not score flows with the original dataset model: its features do not match real traffic. Use the Live detection page, which uses the separate live-adapted model.'
 
 export function CompatibilityView({ report, features }: { report: CompatibilityReport; features?: FeatureRule[] }) {
   const rows = features ?? report.features ?? []

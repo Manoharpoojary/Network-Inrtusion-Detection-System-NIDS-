@@ -104,7 +104,7 @@ describe('Network live capture', () => {
     const start = await screen.findByRole('button', { name: /start/i })
     await waitFor(() => expect(screen.getByRole('option', { name: 'Wi-Fi' })).toBeInTheDocument())
     expect(start).toBeDisabled()
-    expect(screen.getAllByText(/not scored by the model/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/does not score flows with the original dataset model/).length).toBeGreaterThan(0)
 
     await userEvent.click(screen.getByLabelText(/authorised to monitor/i))
     expect(start).toBeEnabled()

@@ -423,9 +423,59 @@ export interface LiveStatus {
     counters: Record<string, number>
     queue: { depth: number; capacity: number }
     active_flows: number
+    detect?: boolean
   } | null
   recent_flows?: FlowSample[]
   compatibility?: CompatibilityReport | null
   predictions?: null
+  detection?: DetectionStatus
   live_inference: { enabled: boolean; gate_allowed: boolean; reasons: string[]; note: string }
+}
+
+export type DetectionLabel = 'Anomaly' | 'Normal'
+
+export interface LiveDetection {
+  id?: number
+  run_id?: string
+  source?: 'live' | 'pcap'
+  detected_at: string
+  label: DetectionLabel
+  anomaly_probability: number
+  protocol: string
+  sport: number
+  dport: number
+  duration_s: number
+  fwd_pkts: number
+  bwd_pkts: number
+  fwd_bytes: number
+  bwd_bytes: number
+  features: Record<string, number>
+}
+
+export interface DetectionStatus {
+  model_available: boolean
+  enabled: boolean
+  model_version: string | null
+  threshold: number | null
+  time_unit: string | null
+  recent?: LiveDetection[]
+}
+
+export interface LiveModelInfo {
+  available: boolean
+  error?: string | null
+  model_version?: string
+  artifact_file?: string
+  artifact_sha256?: string
+  pickled_sklearn_version?: string | null
+  n_estimators?: number
+  classes?: string[]
+  features?: string[]
+  anomaly_threshold?: number
+  time_unit?: string
+  global_importance?: { feature: string; importance: number }[]
+}
+
+export interface DetectionPage extends Page<LiveDetection> {
+  totals: { anomaly: number; normal: number }
 }
